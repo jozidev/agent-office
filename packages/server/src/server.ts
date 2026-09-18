@@ -6,6 +6,7 @@ import { ClientMessage, type ServerMessage } from "@agent-office/shared";
 import { Office } from "./office.js";
 import { MockRunner } from "./mockRunner.js";
 import type { SessionRunner } from "./runner.js";
+import { runSetupChecks } from "./setup.js";
 
 export interface ServerOptions {
   runner?: SessionRunner;
@@ -29,6 +30,7 @@ export async function createServer(opts: ServerOptions = {}) {
 
   app.get("/api/health", async () => ({ ok: true }));
   app.get("/api/snapshot", async () => office.snapshot());
+  app.get("/api/setup", async () => runSetupChecks(office.snapshot().agents));
 
   /** Claude Code hooks POST here (M3). Accepted now so hook config can be written early. */
   app.post("/api/hook", async (req) => {

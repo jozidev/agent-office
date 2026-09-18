@@ -55,5 +55,8 @@ for (let i = 0; i < 40; i++) {
 await page.click(".hud >> text=Close board"); await page.click(".panel header button"); await page.mouse.move(10, 10);
 await page.waitForTimeout(200);
 await page.screenshot({ path: `${out}/7-waiting.png` });
+await page.click(".hud >> text=Setup");
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${out}/8-setup.png` });
 console.log("errors:", errors);
 await browser.close();

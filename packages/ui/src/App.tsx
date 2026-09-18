@@ -6,6 +6,8 @@ import { Tooltip } from "./ui/Tooltip";
 import { AgentPanel } from "./ui/AgentPanel";
 import { HireModal } from "./ui/HireModal";
 import { Board } from "./ui/Board";
+import { SetupPage } from "./ui/SetupPage";
+import { useEffect } from "react";
 
 const DROP_RADIUS = 90;
 
@@ -28,6 +30,17 @@ export function App() {
   const setHovered = useOffice((s) => s.setHovered);
   const dragging = useOffice((s) => s.draggingTicketId);
   const toasts = useOffice((s) => s.toasts);
+  const setSetupOpen = useOffice((s) => s.setSetupOpen);
+
+  // First run: open the setup page automatically when something fails.
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((rep: { overall: string }) => {
+        if (rep.overall === "fail" && !sessionStorage.getItem("setup-dismissed")) setSetupOpen(true);
+      })
+      .catch(() => {});
+  }, [setSetupOpen]);
 
   return (
     <div
@@ -54,6 +67,7 @@ export function App() {
       <Board />
       <AgentPanel />
       <HireModal />
+      <SetupPage />
       {dragging && <div className="drop-hint">drop on a desk to assign</div>}
       <div className="toasts">
         {toasts.map((t) => (

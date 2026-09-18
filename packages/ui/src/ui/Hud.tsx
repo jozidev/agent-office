@@ -6,6 +6,7 @@ export function Hud() {
   const boardOpen = useOffice((s) => s.boardOpen);
   const setBoardOpen = useOffice((s) => s.setBoardOpen);
   const setHireOpen = useOffice((s) => s.setHireOpen);
+  const setSetupOpen = useOffice((s) => s.setSetupOpen);
   const list = Object.values(states);
   const busy = list.filter((s) => s.status === "thinking" || s.status === "tool_use").length;
   const idle = list.filter((s) => s.status === "idle").length;
@@ -31,6 +32,7 @@ export function Hud() {
       )}
       <span className="spacer" />
       <span className="conn">{connected ? "● live" : "○ reconnecting"}</span>
+      <button onClick={() => setSetupOpen(true)}>Setup</button>
       <button onClick={() => setBoardOpen(!boardOpen)}>{boardOpen ? "Close board" : "Board"}</button>
       <button className="primary" onClick={() => setHireOpen(true)}>
         + Hire

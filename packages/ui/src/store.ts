@@ -15,6 +15,7 @@ interface OfficeStore {
   selectedAgentId: string | null;
   boardOpen: boolean;
   hireOpen: boolean;
+  setupOpen: boolean;
   /** ticket currently being dragged from the board (so desks can accept it) */
   draggingTicketId: string | null;
   toasts: Toast[];
@@ -25,6 +26,7 @@ interface OfficeStore {
   setSelected(id: string | null): void;
   setBoardOpen(v: boolean): void;
   setHireOpen(v: boolean): void;
+  setSetupOpen(v: boolean): void;
   setDragging(id: string | null): void;
   toast(text: string): void;
 }
@@ -41,6 +43,7 @@ export const useOffice = create<OfficeStore>((set, get) => ({
   selectedAgentId: null,
   boardOpen: false,
   hireOpen: false,
+  setupOpen: false,
   draggingTicketId: null,
   toasts: [],
 
@@ -93,6 +96,16 @@ export const useOffice = create<OfficeStore>((set, get) => ({
   setSelected: (selectedAgentId) => set({ selectedAgentId }),
   setBoardOpen: (boardOpen) => set({ boardOpen }),
   setHireOpen: (hireOpen) => set({ hireOpen }),
+  setSetupOpen: (setupOpen) => {
+    if (!setupOpen) {
+      try {
+        sessionStorage.setItem("setup-dismissed", "1");
+      } catch {
+        /* ignore */
+      }
+    }
+    set({ setupOpen });
+  },
   setDragging: (draggingTicketId) => set({ draggingTicketId }),
   toast(text) {
     const id = ++toastSeq;

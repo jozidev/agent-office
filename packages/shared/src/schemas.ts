@@ -157,3 +157,23 @@ export const RunnerEvent = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("error"), message: z.string() }),
 ]);
 export type RunnerEvent = z.infer<typeof RunnerEvent>;
+
+// ---------- Setup page ----------
+
+export const SetupCheck = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.enum(["ok", "warn", "fail"]),
+  detail: z.string(),
+  hint: z.string().optional(),
+  /** an optional suggested fix; the UI shows it, the user runs it */
+  fix: z.object({ label: z.string(), command: z.string() }).optional(),
+});
+export type SetupCheck = z.infer<typeof SetupCheck>;
+
+export const SetupReport = z.object({
+  checkedAt: z.string(),
+  overall: z.enum(["ok", "warn", "fail"]),
+  checks: z.array(SetupCheck),
+});
+export type SetupReport = z.infer<typeof SetupReport>;
