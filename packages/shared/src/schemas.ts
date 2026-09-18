@@ -22,6 +22,32 @@ export type TicketStatus = z.infer<typeof TicketStatus>;
 export const UiMode = z.enum(["terminal", "chat"]);
 export type UiMode = z.infer<typeof UiMode>;
 
+/**
+ * The modes `claude --permission-mode` actually accepts. The app used to offer
+ * "default", which is not one of them (the real name is "manual") and which
+ * left out "auto" entirely. `legacyPermissionMode` maps the old value so
+ * agents already in the database keep working.
+ */
+export const PermissionMode = z.enum(["manual", "auto", "acceptEdits", "plan", "bypassPermissions", "dontAsk"]);
+export type PermissionMode = z.infer<typeof PermissionMode>;
+
+export const DEFAULT_PERMISSION_MODE: PermissionMode = "manual";
+
+export const PERMISSION_MODES: readonly { id: PermissionMode; label: string; blurb: string }[] = [
+  { id: "manual", label: "manual", blurb: "Ask me before anything." },
+  { id: "auto", label: "auto", blurb: "Decide per call; ask when unsure." },
+  { id: "acceptEdits", label: "accept edits", blurb: "Edit freely, ask for the rest." },
+  { id: "plan", label: "plan", blurb: "Research and propose only, never act." },
+  { id: "dontAsk", label: "don't ask", blurb: "Never prompt; deny what would." },
+  { id: "bypassPermissions", label: "bypass", blurb: "No checks at all. Careful." },
+];
+
+/** Rows written before the mode list was corrected carry "default". */
+export function legacyPermissionMode(value: string): PermissionMode {
+  const parsed = PermissionMode.safeParse(value === "default" ? "manual" : value);
+  return parsed.success ? parsed.data : DEFAULT_PERMISSION_MODE;
+}
+
 // ---------- Entities ----------
 
 export const Agent = z.object({
@@ -33,7 +59,7 @@ export const Agent = z.object({
   cwd: z.string(),
   systemPrompt: z.string().default(""),
   allowedTools: z.array(z.string()).default([]),
-  permissionMode: z.enum(["default", "acceptEdits", "plan", "bypassPermissions"]).default("default"),
+  permissionMode: PermissionMode.default(DEFAULT_PERMISSION_MODE),
   uiMode: UiMode,
   /** desk slot index on the office grid */
   desk: z.number().int().nonnegative(),
@@ -106,6 +132,13 @@ export const ClientMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("hello") }),
   z.object({ type: z.literal("agent.hire"), payload: HireAgent }),
   z.object({ type: z.literal("agent.fire"), agentId: z.string() }),
+  /** Change an agent's config in place. Both fields are spawn-time flags, so they apply to the next run. */
+  z.object({
+    type: z.literal("agent.update"),
+    agentId: z.string(),
+    model: z.string().optional(),
+    permissionMode: PermissionMode.optional(),
+  }),
   z.object({
     type: z.literal("ticket.create"),
     title: z.string().min(1).max(120),

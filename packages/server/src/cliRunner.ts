@@ -52,6 +52,26 @@ function summarizeToolInput(input: unknown): string {
   return truncate(s, 60);
 }
 
+/**
+ * Tools that exist to hand the turn back to the user. A headless `claude -p`
+ * cannot prompt, so calling one of these ends the run — the stream reports a
+ * perfectly successful `result` and the office used to call that "done". It is
+ * not done; it is waiting on you.
+ */
+const ASK_TOOLS = new Set(["ExitPlanMode", "AskUserQuestion"]);
+
+/** The question to show on the agent's bubble, dug out of the ask tool's input. */
+function askPrompt(tool: string, input: unknown): string {
+  const i = (input ?? {}) as Record<string, unknown>;
+  if (tool === "AskUserQuestion") {
+    const questions = Array.isArray(i["questions"]) ? (i["questions"] as Record<string, unknown>[]) : [];
+    const first = questions[0]?.["question"];
+    if (typeof first === "string") return truncate(first, 300);
+  }
+  if (typeof i["plan"] === "string") return truncate(i["plan"] as string, 300);
+  return `${tool} needs your answer`;
+}
+
 interface AnthropicUsage {
   input_tokens?: number;
   output_tokens?: number;
@@ -84,7 +104,18 @@ interface StreamLine {
  * be driven directly by tests against recorded fixtures without spawning a
  * process. One instance per session.
  */
-export function createStreamParser(emit: (e: RunnerEvent) => void) {
+export interface StreamParserOpts {
+  /**
+   * True when the agent runs in `plan` permission mode. Plan mode cannot act —
+   * it can only propose — so a run that finishes has by definition produced
+   * something for you to approve, whether or not it got as far as calling
+   * ExitPlanMode. Without this, every plan-mode ticket reported itself done
+   * and the agent went idle with your decision still outstanding.
+   */
+  proposesOnly?: boolean;
+}
+
+export function createStreamParser(emit: (e: RunnerEvent) => void, opts: StreamParserOpts = {}) {
   // Running totals: token counts accumulate across turns (real session
   // cost is the sum of each turn's contribution); cost comes verbatim
   // from the "result" message's total_cost_usd once it arrives.
@@ -94,6 +125,10 @@ export function createStreamParser(emit: (e: RunnerEvent) => void) {
   let lastCostUsd = 0;
   const openSubagents = new Set<string>();
   let gotResult = false;
+  /** Set when the turn's last action was asking the user something. */
+  let pendingAsk: { tool: string; prompt: string } | null = null;
+  /** The last "result" seen, settled once the process exits. */
+  let outcome: { failed: boolean; text: string; ask: string | null } | null = null;
 
   const closeAllSubagents = () => {
     for (const id of openSubagents) emit({ kind: "subagent_stop", id });
@@ -118,6 +153,10 @@ export function createStreamParser(emit: (e: RunnerEvent) => void) {
       } else if (block.type === "tool_use") {
         const name = block.name ?? "Tool";
         const summary = summarizeToolInput(block.input);
+        // Only the main agent can be waiting on the user; a subagent's
+        // ExitPlanMode is its own business. Any other tool means the turn
+        // carried on, so an earlier ask no longer stands.
+        if (!inSubagent) pendingAsk = ASK_TOOLS.has(name) ? { tool: name, prompt: askPrompt(name, block.input) } : null;
         if (inSubagent) {
           emit({ kind: "subagent_tool", id: line.parent_tool_use_id as string, name, summary });
         } else if (name === "Agent" || name === "Task") {
@@ -138,13 +177,36 @@ export function createStreamParser(emit: (e: RunnerEvent) => void) {
     }
   };
 
+  /**
+   * A "result" line ends a *turn*, not the session: one `claude -p` run can
+   * re-init and take several turns, emitting one result each. Emitting on the
+   * first one marked the ticket done and dropped the session while the agent
+   * was still working. So record the outcome and settle it once the process
+   * actually exits, keeping whichever result came last.
+   */
   const handleResult = (line: StreamLine) => {
     gotResult = true;
     applyUsage(line.usage, line.total_cost_usd);
     const failed = Boolean(line.is_error) || (line.subtype !== undefined && line.subtype !== "success");
-    const text = line.result ?? (failed ? "session ended with an error" : "done");
-    closeAllSubagents();
-    if (failed) emit({ kind: "error", message: truncate(text, 300) });
+    outcome = {
+      failed,
+      text: line.result ?? (failed ? "session ended with an error" : "done"),
+      ask: pendingAsk?.prompt ?? null,
+    };
+  };
+
+  /** Turn the last recorded result into the one event that ends the session. */
+  const settle = () => {
+    if (!outcome) return;
+    const { failed, text, ask } = outcome;
+    outcome = null;
+    if (failed) {
+      emit({ kind: "error", message: truncate(text, 300) });
+      return;
+    }
+    // A clean result after an ask — or from an agent that can only propose —
+    // is the headless CLI saying "I can't prompt you, so I stopped".
+    if (ask || opts.proposesOnly) emit({ kind: "waiting", prompt: ask || truncate(text, 300) });
     else emit({ kind: "done", summary: truncate(text, 300) });
   };
 
@@ -182,6 +244,7 @@ export function createStreamParser(emit: (e: RunnerEvent) => void) {
      */
     onProcessClose: (code: number | null, stderrTail: string, suppressErrorEmit = false) => {
       closeAllSubagents();
+      if (!suppressErrorEmit) settle();
       if (!gotResult && !suppressErrorEmit) {
         const detail = stderrTail ? `: ${stderrTail}` : "";
         emit({ kind: "error", message: truncate(`claude exited with code ${code ?? "unknown"}${detail}`, 500) });
@@ -193,9 +256,23 @@ export function createStreamParser(emit: (e: RunnerEvent) => void) {
   };
 }
 
+/**
+ * The flags every headless run for this agent needs. Shared by `start` and
+ * `resume` so a resumed turn cannot quietly run with different permissions or
+ * a different model than the run it is continuing.
+ */
+function headlessArgs(agent: Agent, prompt: string): string[] {
+  const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+  if (agent.model) args.push("--model", agent.model);
+  args.push("--permission-mode", agent.permissionMode);
+  if (agent.allowedTools.length) args.push("--allowedTools", agent.allowedTools.join(","));
+  if (agent.systemPrompt) args.push("--append-system-prompt", agent.systemPrompt);
+  return args;
+}
+
 /** A session that never started: keeps the caller's bookkeeping uniform after a failed launch. */
 function inertSession(): RunningSession {
-  return { sessionId: "pending", respond: () => {}, stop: () => {} };
+  return { sessionId: "pending", respond: () => {}, stop: () => {}, isAlive: () => false };
 }
 
 /**
@@ -209,12 +286,19 @@ export class CliRunner implements SessionRunner {
 
   start(agent: Agent, ticket: Ticket, emit: (e: RunnerEvent) => void): RunningSession {
     const prompt = ticket.description ? `${ticket.title}\n\n${ticket.description}` : ticket.title;
-    const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
-    if (agent.model) args.push("--model", agent.model);
-    args.push("--permission-mode", agent.permissionMode);
-    if (agent.allowedTools.length) args.push("--allowedTools", agent.allowedTools.join(","));
-    if (agent.systemPrompt) args.push("--append-system-prompt", agent.systemPrompt);
+    return this.launch(agent, headlessArgs(agent, prompt), emit);
+  }
 
+  /**
+   * Continue a conversation that stopped to ask the user something. The
+   * original `claude -p` process is long gone by then, so answering means a
+   * fresh run against the same session id rather than a write to its stdin.
+   */
+  resume(agent: Agent, sessionId: string, text: string, emit: (e: RunnerEvent) => void): RunningSession {
+    return this.launch(agent, [...headlessArgs(agent, text), "--resume", sessionId], emit);
+  }
+
+  private launch(agent: Agent, args: string[], emit: (e: RunnerEvent) => void): RunningSession {
     const cwd = expandHome(agent.cwd);
 
     // spawn() reports a missing cwd as ENOENT naming the *binary*, which reads
@@ -226,8 +310,9 @@ export class CliRunner implements SessionRunner {
 
     const proc = spawn(this.command, args, { cwd, detached: true, stdio: ["pipe", "pipe", "pipe"] });
 
-    const parser = createStreamParser(emit);
+    const parser = createStreamParser(emit, { proposesOnly: agent.permissionMode === "plan" });
     let stopped = false;
+    let exited = false;
     let stderrTail = "";
     let stdoutBuf = "";
 
@@ -255,6 +340,7 @@ export class CliRunner implements SessionRunner {
     });
 
     proc.on("close", (code) => {
+      exited = true;
       if (stdoutBuf) parser.handleLine(stdoutBuf); // flush a trailing line with no final newline
       parser.onProcessClose(code, stderrTail, stopped || spawnFailed);
     });
@@ -274,6 +360,7 @@ export class CliRunner implements SessionRunner {
 
     return {
       sessionId: "pending", // real id arrives async via the "started" event once system/init is parsed
+      isAlive: () => !exited,
       respond: (text: string) => {
         try {
           proc.stdin?.write(`${text}\n`);

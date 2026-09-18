@@ -8,15 +8,24 @@ import type { RunningSession, SessionRunner } from "./runner.js";
 class ManualRunner implements SessionRunner {
   emit!: (e: RunnerEvent) => void;
   stopped = 0;
+  resumed: { sessionId: string; text: string }[] = [];
+  responded: string[] = [];
+  /** Flip to false to model a headless run whose process has already exited. */
+  alive = true;
   start(_a: Agent, _t: Ticket, emit: (e: RunnerEvent) => void): RunningSession {
     this.emit = emit;
-    return { sessionId: "s1", respond: () => {}, stop: () => this.stopped++ };
+    return { sessionId: "s1", respond: (t) => void this.responded.push(t), stop: () => this.stopped++, isAlive: () => this.alive };
+  }
+  resume(_a: Agent, sessionId: string, text: string, emit: (e: RunnerEvent) => void): RunningSession {
+    this.emit = emit;
+    this.resumed.push({ sessionId, text });
+    return { sessionId, respond: () => {}, stop: () => this.stopped++, isAlive: () => true };
   }
 }
 
 function setup() {
   const runner = new ManualRunner();
-  const office = new Office(runner);
+  const office = new Office(runner, { roots: ["/"] });
   const msgs: ServerMessage[] = [];
   office.subscribe((m) => msgs.push(m));
   return { runner, office, msgs };
@@ -192,15 +201,99 @@ describe("Office.ingestExternal (hook-driven, no ticket)", () => {
 
 describe("hire model", () => {
   it("uses the model the hire form picked", () => {
-    const office = new Office(new ManualRunner());
+    const office = new Office(new ManualRunner(), { roots: ["/"] });
     const agent = office.hire({ name: "Ada", role: "coder", cwd: "/tmp", model: "claude-haiku-4-5" });
     expect(agent.model).toBe("claude-haiku-4-5");
   });
 
   it("falls back to the role preset when no model is given", () => {
-    const office = new Office(new ManualRunner());
+    const office = new Office(new ManualRunner(), { roots: ["/"] });
     const agent = office.hire({ name: "Rex", role: "reviewer", cwd: "/tmp" });
     expect(agent.model).toBe(ROLE_PRESETS.reviewer.model);
     expect(agent.model).toBe(DEFAULT_MODEL);
+  });
+});
+
+describe("answering an agent that needs you", () => {
+  /** Drive an agent to `waiting` the way a real headless run gets there. */
+  function waiting() {
+    const { runner, office, msgs } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("do a thing", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "sess-1" });
+    runner.emit({ kind: "waiting", prompt: "Postgres or SQLite?" });
+    return { runner, office, msgs, agent, ticket };
+  }
+
+  it("puts the agent and its ticket into waiting", () => {
+    const { office, agent, ticket } = waiting();
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.status).toBe("waiting");
+    expect(office.snapshot().tickets.find((t) => t.id === ticket.id)?.status).toBe("waiting");
+  });
+
+  it("resumes the same conversation when the headless run has already exited", () => {
+    const { runner, office, agent, ticket } = waiting();
+    // A headless run is gone by the time it is waiting, so the office must
+    // start a fresh `claude -p --resume` rather than write to a dead stdin.
+    runner.alive = false;
+    office.respond(agent.id, "SQLite");
+
+    expect(runner.resumed).toEqual([{ sessionId: "sess-1", text: "SQLite" }]);
+    const state = office.snapshot().states.find((s) => s.agentId === agent.id);
+    expect(state?.status).toBe("thinking");
+    expect(office.snapshot().tickets.find((t) => t.id === ticket.id)?.status).toBe("in_progress");
+  });
+
+  it("writes to stdin instead when the session is still alive", () => {
+    const { runner, office, agent } = waiting();
+    office.respond(agent.id, "SQLite");
+    expect(runner.responded).toEqual(["SQLite"]);
+    expect(runner.resumed).toEqual([]);
+  });
+});
+
+describe("updateAgent", () => {
+  it("changes the model and permission mode, persists and broadcasts", () => {
+    const { office, msgs } = setup();
+    const agent = office.hire({ name: "Ada", role: "reviewer", cwd: "/x" });
+    msgs.length = 0;
+
+    expect(office.updateAgent(agent.id, { model: "claude-sonnet-5", permissionMode: "acceptEdits" })).toBeUndefined();
+    const updated = office.snapshot().agents.find((a) => a.id === agent.id);
+    expect(updated?.model).toBe("claude-sonnet-5");
+    expect(updated?.permissionMode).toBe("acceptEdits");
+    expect(msgs.some((m) => m.type === "agent.upsert" && m.agent.id === agent.id)).toBe(true);
+  });
+
+  it("leaves untouched fields alone", () => {
+    const { office } = setup();
+    const agent = office.hire({ name: "Ada", role: "reviewer", cwd: "/x" });
+    office.updateAgent(agent.id, { permissionMode: "plan" });
+    expect(office.snapshot().agents.find((a) => a.id === agent.id)?.model).toBe(agent.model);
+  });
+
+  it("reports an unknown agent instead of throwing", () => {
+    const { office } = setup();
+    expect(office.updateAgent("nope", { permissionMode: "plan" })).toContain("nope");
+  });
+});
+
+describe("hook events during an office-run session", () => {
+  it("still drops duplicate tool calls, but lets a waiting through", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("do a thing", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "sess-1" });
+
+    const before = office.snapshot().states.find((s) => s.agentId === agent.id)!.log.length;
+    // PreToolUse fires for the office's own run too — this is bug 5's guard.
+    office.ingestExternal(agent.id, { kind: "tool_use", name: "Write", summary: "/tmp/x" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)!.log.length).toBe(before);
+
+    // ...but the stream never emits "waiting", so that one has to get through.
+    office.ingestExternal(agent.id, { kind: "waiting", prompt: "may I?" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.status).toBe("waiting");
   });
 });

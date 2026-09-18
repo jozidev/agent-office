@@ -156,17 +156,13 @@ export class TerminalManager {
       env: { ...process.env, TERM: "xterm-256color" } as { [key: string]: string },
     };
 
-    let pty: IPty;
-    if (commandExists("claude")) {
-      pty = spawnPty("claude", claudeArgs, ptyOpts);
-    } else {
-      // `claude` is not on PATH: fall back to an interactive shell so the
-      // popup is still useful, with a one-line notice explaining why.
-      const shell = process.env.SHELL ?? "/bin/bash";
-      pty = spawnPty(shell, [], ptyOpts);
-      const notice = "claude CLI not found on PATH — opening a shell instead. Install with: npm install -g @anthropic-ai/claude-code\r\n\r\n";
-      ring.push(notice);
+    // No shell fallback: handing an unauthenticated socket an interactive
+    // login shell turns "the terminal panel is blank" into arbitrary command
+    // execution. Say what is wrong instead.
+    if (!commandExists("claude")) {
+      throw new Error("claude CLI not found on PATH — install it with: npm install -g @anthropic-ai/claude-code");
     }
+    const pty: IPty = spawnPty("claude", claudeArgs, ptyOpts);
 
     const batcher = createBatcher((batch) => {
       ring.push(batch);

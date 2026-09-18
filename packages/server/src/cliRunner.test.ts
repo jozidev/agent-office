@@ -10,10 +10,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string) => readFileSync(join(here, "__fixtures__", name), "utf8");
 
 /** Feed a whole recorded NDJSON transcript through the parser and collect what it emitted. */
-function run(ndjson: string): RunnerEvent[] {
+function run(ndjson: string, opts: { proposesOnly?: boolean } = {}): RunnerEvent[] {
   const events: RunnerEvent[] = [];
-  const parser = createStreamParser((e) => events.push(e));
+  const parser = createStreamParser((e) => events.push(e), opts);
   for (const line of ndjson.split("\n")) parser.handleLine(line);
+  // The session settles on process exit, not on the first "result" line — one
+  // `claude -p` run can take several turns and emit one result each.
+  parser.onProcessClose(0, "");
   return events;
 }
 
@@ -153,5 +156,146 @@ describe("CliRunner launch failures", () => {
     const errors = events.filter((e) => e.kind === "error");
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatchObject({ message: expect.stringContaining("is not on PATH") });
+  });
+});
+
+/** Minimal NDJSON for a run: an assistant turn using `tools`, then a result. */
+function transcript(tools: { name: string; input?: unknown }[], result: { subtype?: string; is_error?: boolean; result?: string } = {}) {
+  const lines = [JSON.stringify({ type: "system", subtype: "init", session_id: "sess-ask" })];
+  for (const t of tools) {
+    lines.push(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: t.name, input: t.input ?? {} }] } }));
+  }
+  lines.push(JSON.stringify({ type: "result", subtype: result.subtype ?? "success", is_error: result.is_error ?? false, result: result.result ?? "all done" }));
+  return lines.join("\n");
+}
+
+/**
+ * A headless `claude -p` cannot prompt, so a turn that ends on ExitPlanMode or
+ * AskUserQuestion reports a perfectly successful result. Calling that "done"
+ * is what made an agent that needed the user look finished and idle.
+ */
+describe("a run that ends needing the user", () => {
+  it("ends waiting, not done, when the last tool was ExitPlanMode", () => {
+    const events = run(transcript([{ name: "ExitPlanMode", input: { plan: "Refactor the parser, then add tests." } }]));
+    const last = events.at(-1);
+    expect(last?.kind).toBe("waiting");
+    if (last?.kind === "waiting") expect(last.prompt).toBe("Refactor the parser, then add tests.");
+    expect(events.some((e) => e.kind === "done")).toBe(false);
+  });
+
+  it("carries the question when the last tool was AskUserQuestion", () => {
+    const events = run(transcript([{ name: "AskUserQuestion", input: { questions: [{ question: "Postgres or SQLite?" }] } }]));
+    const last = events.at(-1);
+    expect(last?.kind).toBe("waiting");
+    if (last?.kind === "waiting") expect(last.prompt).toBe("Postgres or SQLite?");
+  });
+
+  it("falls back to the result text when the ask carried no readable prompt", () => {
+    const events = run(transcript([{ name: "ExitPlanMode", input: {} }]));
+    const last = events.at(-1);
+    if (last?.kind === "waiting") expect(last.prompt).toBe("ExitPlanMode needs your answer");
+  });
+
+  it("still ends done when a later tool shows the turn carried on", () => {
+    const events = run(transcript([{ name: "ExitPlanMode", input: { plan: "do a thing" } }, { name: "Write", input: { file_path: "/tmp/x" } }]));
+    expect(events.at(-1)?.kind).toBe("done");
+  });
+
+  it("leaves an ordinary run alone", () => {
+    expect(run(transcript([{ name: "Read", input: { file_path: "/tmp/x" } }])).at(-1)?.kind).toBe("done");
+  });
+
+  it("reports a failure as an error even if it ended on an ask", () => {
+    const events = run(transcript([{ name: "ExitPlanMode", input: { plan: "x" } }], { subtype: "error_max_turns", is_error: true }));
+    expect(events.at(-1)?.kind).toBe("error");
+  });
+
+  it("ignores a subagent's own ExitPlanMode — only the main agent can block on you", () => {
+    const lines = [
+      JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+      JSON.stringify({ type: "assistant", parent_tool_use_id: "sub1", message: { content: [{ type: "tool_use", name: "ExitPlanMode", input: { plan: "sub plan" } }] } }),
+      JSON.stringify({ type: "result", subtype: "success", result: "done" }),
+    ].join("\n");
+    expect(run(lines).at(-1)?.kind).toBe("done");
+  });
+});
+
+/**
+ * Plan mode cannot act, only propose — so a plan-mode run that finishes has
+ * produced something for you to decide on, even when it never got as far as
+ * calling ExitPlanMode. This is the case that actually bit: a Reviewer agent
+ * researched, wrote up its findings, and the office called that "done".
+ */
+describe("a plan-mode run", () => {
+  const planRun = (ndjson: string) => run(ndjson, { proposesOnly: true });
+
+  it("ends waiting even without an explicit ask tool", () => {
+    const events = planRun(transcript([{ name: "Read", input: { file_path: "/x" } }], { result: "Here is what I would change." }));
+    const last = events.at(-1);
+    expect(last?.kind).toBe("waiting");
+    if (last?.kind === "waiting") expect(last.prompt).toBe("Here is what I would change.");
+  });
+
+  it("still prefers the ask tool's own prompt when there was one", () => {
+    const events = planRun(transcript([{ name: "ExitPlanMode", input: { plan: "Step one, step two." } }]));
+    const last = events.at(-1);
+    if (last?.kind === "waiting") expect(last.prompt).toBe("Step one, step two.");
+  });
+
+  it("still reports a genuine failure as an error", () => {
+    const events = planRun(transcript([{ name: "Read" }], { subtype: "error_max_turns", is_error: true }));
+    expect(events.at(-1)?.kind).toBe("error");
+  });
+
+  it("does not affect an agent that can act", () => {
+    expect(run(transcript([{ name: "Read" }])).at(-1)?.kind).toBe("done");
+  });
+});
+
+/**
+ * One `claude -p` invocation can re-init and take several turns, emitting a
+ * "result" for each. Settling on the first one marked the ticket done and
+ * dropped the session while the agent was still working — which is how an
+ * agent came to sit idle with a finished ticket and unfinished work.
+ */
+describe("a run that emits more than one result", () => {
+  const twoTurns = [
+    JSON.stringify({ type: "system", subtype: "init", session_id: "s1" }),
+    JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: {} }] } }),
+    JSON.stringify({ type: "result", subtype: "success", result: "first turn" }),
+    JSON.stringify({ type: "system", subtype: "init", session_id: "s1" }),
+    JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: {} }] } }),
+    JSON.stringify({ type: "result", subtype: "success", result: "second turn" }),
+  ].join("\n");
+
+  it("settles exactly once, on the last result", () => {
+    const events = run(twoTurns);
+    const terminal = events.filter((e) => e.kind === "done" || e.kind === "error" || e.kind === "waiting");
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]).toMatchObject({ kind: "done", summary: "second turn" });
+  });
+
+  it("does not settle while the process is still running", () => {
+    const events: RunnerEvent[] = [];
+    const parser = createStreamParser((e) => events.push(e));
+    for (const line of twoTurns.split("\n")) parser.handleLine(line);
+    expect(events.some((e) => e.kind === "done")).toBe(false);
+  });
+
+  it("lets a later failure override an earlier success", () => {
+    const lines = [
+      JSON.stringify({ type: "system", subtype: "init", session_id: "s1" }),
+      JSON.stringify({ type: "result", subtype: "success", result: "ok so far" }),
+      JSON.stringify({ type: "result", subtype: "error_during_execution", is_error: true, result: "blew up" }),
+    ].join("\n");
+    expect(run(lines).at(-1)).toMatchObject({ kind: "error" });
+  });
+
+  it("stays silent when the run was stopped on purpose", () => {
+    const events: RunnerEvent[] = [];
+    const parser = createStreamParser((e) => events.push(e));
+    for (const line of twoTurns.split("\n")) parser.handleLine(line);
+    parser.onProcessClose(0, "", true); // stop() was called
+    expect(events.some((e) => e.kind === "done" || e.kind === "error")).toBe(false);
   });
 });

@@ -102,6 +102,9 @@ export class MockRunner implements SessionRunner {
 
     return {
       sessionId,
+      // The mock keeps its session running across a `waiting`, so there is
+      // always something there to answer.
+      isAlive: () => !stopped,
       respond: (text) => {
         if (waitingResolve) waitingResolve(text);
       },
@@ -111,5 +114,17 @@ export class MockRunner implements SessionRunner {
         if (waitingResolve) waitingResolve("");
       },
     };
+  }
+
+  /**
+   * The mock keeps its session alive across a `waiting`, so `respond` already
+   * unblocks it and there is nothing to resume. Present only so the demo
+   * office satisfies the same interface as the real runner.
+   */
+  resume(agent: Agent, sessionId: string, text: string, emit: (e: RunnerEvent) => void): RunningSession {
+    void text;
+    emit({ kind: "started", sessionId });
+    emit({ kind: "done", summary: `Resumed ${agent.name}` });
+    return { sessionId, respond: () => {}, stop: () => {}, isAlive: () => false };
   }
 }

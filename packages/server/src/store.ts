@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import Database from "better-sqlite3";
+import { legacyPermissionMode } from "@agent-office/shared";
 import type { Agent, Ticket, TicketStatus } from "@agent-office/shared";
 
 /**
@@ -148,7 +149,8 @@ export class SqliteStore implements Store {
       cwd: r.cwd,
       systemPrompt: r.systemPrompt,
       allowedTools: JSON.parse(r.allowedTools) as string[],
-      permissionMode: r.permissionMode,
+      // Rows written before the mode list was corrected carry "default".
+      permissionMode: legacyPermissionMode(r.permissionMode),
       uiMode: r.uiMode,
       desk: r.desk,
       createdAt: r.createdAt,

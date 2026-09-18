@@ -9,11 +9,12 @@ import type { SessionRunner } from "./runner.js";
 import { runSetupChecks } from "./setup.js";
 import { hookToEvents, type HookPayload } from "./hooks.js";
 import type { RunnerKind } from "./pickRunner.js";
-import { registerTerminalRoutes } from "./terminal.js";
+import { registerTerminalRoutes, type TerminalManager } from "./terminal.js";
 import { registerNativeTerminalRoutes } from "./nativeTerminal.js";
 import { registerFsRoutes } from "./fsBrowse.js";
 import { registerChatRoutes } from "./chat.js";
 import { MemoryStore, SETTINGS, SqliteStore, type Store } from "./store.js";
+import { allowedOrigins, isAllowedHost, isAllowedOrigin } from "./security.js";
 
 export interface ServerOptions {
   runner?: SessionRunner;
@@ -43,6 +44,26 @@ export async function createServer(opts: ServerOptions = {}) {
 
   const app = Fastify({ logger: opts.logger ?? true });
   await app.register(websocket);
+
+  // The trust boundary, applied once for both HTTP routes and WS upgrades: a
+  // WebSocket upgrade is an ordinary GET, so onRequest sees it before
+  // @fastify/websocket ever accepts the socket. See security.ts for why
+  // loopback binding is not authorization.
+  const origins = allowedOrigins({
+    port: opts.port,
+    // No uiDir means Vite is serving the UI from its own port, not us.
+    dev: !opts.uiDir,
+    extra: process.env.AGENT_OFFICE_ALLOWED_ORIGINS,
+  });
+  app.addHook("onRequest", async (req, reply) => {
+    if (req.url === "/api/health") return;
+    if (!isAllowedHost(req.headers.host, opts.port)) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+    if (!isAllowedOrigin(req.headers.origin, origins)) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+  });
 
   if (opts.uiDir && existsSync(opts.uiDir)) {
     await app.register(fastifyStatic, { root: opts.uiDir, wildcard: false });
@@ -99,7 +120,7 @@ export async function createServer(opts: ServerOptions = {}) {
         return send({ type: "error", message: "invalid json" });
       }
       if (!parsed.success) return send({ type: "error", message: parsed.error.issues.map((i) => i.message).join("; ") });
-      const err = handle(office, parsed.data, store);
+      const err = handle(office, parsed.data, store, terminals);
       if (err) send({ type: "error", message: err });
     });
     socket.on("close", unsub);
@@ -108,17 +129,32 @@ export async function createServer(opts: ServerOptions = {}) {
   return { app, office };
 }
 
-function handle(office: Office, m: ClientMessage, store: Store): string | undefined {
+function handle(office: Office, m: ClientMessage, store: Store, terminals: TerminalManager): string | undefined {
   switch (m.type) {
     case "hello":
       return;
     case "agent.hire":
-      office.hire(m.payload);
+      try {
+        office.hire(m.payload);
+      } catch (err) {
+        return err instanceof Error ? err.message : String(err);
+      }
       store.setSetting(SETTINGS.lastHireDir, m.payload.cwd);
       return;
     case "agent.fire":
       office.fire(m.agentId);
       return;
+    case "agent.update": {
+      const err = office.updateAgent(m.agentId, {
+        ...(m.model !== undefined && { model: m.model }),
+        ...(m.permissionMode !== undefined && { permissionMode: m.permissionMode }),
+      });
+      // --model and --permission-mode are baked in when the pty spawns, so the
+      // terminal has to be restarted to pick them up. It respawns on the next
+      // open with its history replayed from the ring buffer.
+      if (!err) terminals.close(m.agentId);
+      return err;
+    }
     case "ticket.create":
       office.createTicket(m.title, m.description);
       return;
@@ -159,7 +195,7 @@ export function shouldSeed(seedRequested: boolean, runnerKind: RunnerKind, seedE
 export function seed(office: Office) {
   const ada = office.hire({ name: "Ada", role: "coder", cwd: "~/code/shop-api" });
   office.hire({ name: "Rex", role: "reviewer", cwd: "~/code/shop-api" });
-  office.hire({ name: "Mia", role: "chat", cwd: "~" });
+  office.hire({ name: "Mia", role: "chat", cwd: "~/code/shop-api" });
   const bo = office.hire({ name: "Bo", role: "assistant", cwd: "~/Documents" });
 
   const t1 = office.createTicket("Add pagination to /orders", "Cursor-based, keep the old offset params working for a release.");

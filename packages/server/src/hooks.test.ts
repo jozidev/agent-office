@@ -21,7 +21,7 @@ function agentAt(cwd: string): Agent {
     cwd,
     systemPrompt: "",
     allowedTools: [],
-    permissionMode: "default",
+    permissionMode: "manual",
     uiMode: "terminal",
     desk: 0,
     createdAt: new Date().toISOString(),

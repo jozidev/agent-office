@@ -5,6 +5,7 @@ import {
   type Agent,
   type AgentState,
   type HireAgent,
+  type PermissionMode,
   type RunnerEvent,
   type ServerMessage,
   type SessionMetrics,
@@ -15,6 +16,7 @@ import {
 } from "@agent-office/shared";
 import type { RunningSession, SessionRunner } from "./runner.js";
 import { installHooks, uninstallHooks } from "./hooks.js";
+import { allowedRoots, checkAgentCwd } from "./paths.js";
 import { MemoryStore, type Store } from "./store.js";
 
 const emptyMetrics = (): SessionMetrics => ({
@@ -51,7 +53,7 @@ export class Office {
 
   constructor(
     private runner: SessionRunner,
-    private opts: { serverUrl?: string; store?: Store } = {},
+    private opts: { serverUrl?: string; store?: Store; roots?: readonly string[] } = {},
   ) {
     this.store = opts.store ?? new MemoryStore();
   }
@@ -115,6 +117,9 @@ export class Office {
   }
 
   hire(input: HireAgent): Agent {
+    // Confine before anything is written: installHooks below turns this path
+    // into a .claude/settings.local.json, and `~` would make that the global one.
+    checkAgentCwd(input.cwd, this.opts.roots ?? allowedRoots());
     const preset = ROLE_PRESETS[input.role];
     const agent: Agent = {
       id: nanoid(8),
@@ -266,15 +271,63 @@ export class Office {
     this.broadcast({ type: "state.update", state });
   }
 
-  respond(agentId: string, text: string) {
-    this.sessions.get(agentId)?.respond(text);
+  /**
+   * Change an agent's model or permission mode without firing it. Both are
+   * flags baked in when a session spawns, so a run already in flight keeps the
+   * settings it started with rather than being killed mid-ticket.
+   */
+  updateAgent(agentId: string, patch: { model?: string; permissionMode?: PermissionMode }): string | undefined {
+    const agent = this.agents.get(agentId);
+    if (!agent) return `no such agent: ${agentId}`;
+    const next: Agent = {
+      ...agent,
+      ...(patch.model !== undefined && { model: patch.model }),
+      ...(patch.permissionMode !== undefined && { permissionMode: patch.permissionMode }),
+    };
+    if (next.model === agent.model && next.permissionMode === agent.permissionMode) return;
+
+    this.agents.set(agentId, next);
+    this.store.saveAgent(next);
     const state = this.states.get(agentId);
-    if (state && state.status === "waiting") {
+    if (state) {
+      const changed = [
+        ...(next.model !== agent.model ? [`model ${next.model}`] : []),
+        ...(next.permissionMode !== agent.permissionMode ? [`permissions ${next.permissionMode}`] : []),
+      ].join(", ");
+      this.pushLog(state, this.sessions.has(agentId) ? `${changed} (applies to the next run)` : changed);
+      this.broadcast({ type: "state.update", state });
+    }
+    this.broadcast({ type: "agent.upsert", agent: next });
+    return;
+  }
+
+  respond(agentId: string, text: string) {
+    const state = this.states.get(agentId);
+    if (!state) return;
+
+    // A live session takes the answer on stdin. A headless run that stopped to
+    // ask has already exited, so continuing it means a fresh `claude -p
+    // --resume` against the same conversation.
+    const live = this.sessions.get(agentId);
+    if (live?.isAlive()) live.respond(text);
+    else if (state.status === "waiting" && state.sessionId) this.resumeSession(agentId, text);
+    else return;
+
+    if (state.status === "waiting") {
       state.status = "thinking";
       this.pushLog(state, `you: ${text}`);
       if (state.ticketId) this.updateTicket(state.ticketId, { status: "in_progress" });
       this.broadcast({ type: "state.update", state });
     }
+  }
+
+  /** Continue a conversation that ended waiting on the user. */
+  private resumeSession(agentId: string, text: string) {
+    const agent = this.agents.get(agentId);
+    const state = this.states.get(agentId);
+    if (!agent || !state?.sessionId) return;
+    const session = this.runner.resume(agent, state.sessionId, text, (e) => this.onEvent(agentId, e));
+    this.sessions.set(agentId, session);
   }
 
   private pushLog(state: AgentState, line: string) {
@@ -392,8 +445,10 @@ export class Office {
     // Hooks live in the agent's folder, so they also fire for the office's own
     // headless ticket runs — every tool call arrived twice, once from the
     // runner's stream and once from PreToolUse. While a session we started is
-    // running, that session is the authority.
-    if (this.sessions.has(agentId)) return;
+    // running, that session is the authority for everything it reports itself.
+    // "waiting" is the exception: the stream never emits it, so dropping it
+    // here is how an agent that needs you came to look idle.
+    if (this.sessions.has(agentId) && e.kind !== "waiting") return;
     switch (e.kind) {
       case "started":
         if (!state.ticketId) {

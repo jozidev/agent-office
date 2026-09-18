@@ -106,8 +106,8 @@ describe("claudeArgsFor", () => {
   });
 
   it("omits --resume for an agent that has no session yet", () => {
-    const agent = { ...base, model: "claude-opus-5", permissionMode: "default" } as Agent;
-    expect(claudeArgsFor(agent, null)).toEqual(["--model", "claude-opus-5", "--permission-mode", "default"]);
+    const agent = { ...base, model: "claude-opus-5", permissionMode: "manual" } as Agent;
+    expect(claudeArgsFor(agent, null)).toEqual(["--model", "claude-opus-5", "--permission-mode", "manual"]);
   });
 });
 

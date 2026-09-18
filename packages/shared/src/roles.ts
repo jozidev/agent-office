@@ -1,5 +1,5 @@
 import { DEFAULT_MODEL } from "./models.js";
-import type { RoleId, UiMode } from "./schemas.js";
+import type { PermissionMode, RoleId, UiMode } from "./schemas.js";
 
 export interface RolePreset {
   id: RoleId;
@@ -8,7 +8,7 @@ export interface RolePreset {
   uiMode: UiMode;
   model: string;
   allowedTools: string[];
-  permissionMode: "default" | "acceptEdits" | "plan" | "bypassPermissions";
+  permissionMode: PermissionMode;
   systemPrompt: string;
   /** visual props for the character */
   look: { prop: "keyboard" | "headset" | "glasses" | "clipboard" | "none"; color: string };
@@ -44,7 +44,7 @@ export const ROLE_PRESETS: Record<RoleId, RolePreset> = {
     uiMode: "chat",
     model: DEFAULT_MODEL,
     allowedTools: [],
-    permissionMode: "default",
+    permissionMode: "manual",
     systemPrompt: "You are a helpful conversational assistant.",
     look: { prop: "headset", color: "#b48ede" },
   },
@@ -66,7 +66,7 @@ export const ROLE_PRESETS: Record<RoleId, RolePreset> = {
     uiMode: "terminal",
     model: DEFAULT_MODEL,
     allowedTools: [],
-    permissionMode: "default",
+    permissionMode: "manual",
     systemPrompt: "",
     look: { prop: "none", color: "#8fa3b0" },
   },

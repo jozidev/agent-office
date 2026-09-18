@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ROLE_PRESETS } from "@agent-office/shared";
+import { CLAUDE_MODELS, PERMISSION_MODES, ROLE_PRESETS, type PermissionMode } from "@agent-office/shared";
 import { useOffice, statusColor, statusLabel } from "../store";
 import { TerminalPanel } from "./Terminal";
 import { ChatPanel } from "./Chat";
@@ -30,11 +30,34 @@ export function AgentPanel() {
           <span>status</span>
           <b>{statusLabel[state.status]}</b>
           <span>model</span>
-          <b>{agent.model}</b>
+          <select
+            className="kv-edit"
+            value={agent.model}
+            onChange={(e) => send({ type: "agent.update", agentId: agent.id, model: e.target.value })}
+          >
+            {CLAUDE_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+            {/* An agent hired before this list existed keeps whatever it has. */}
+            {!CLAUDE_MODELS.some((m) => m.id === agent.model) && <option value={agent.model}>{agent.model}</option>}
+          </select>
           <span>folder</span>
           <b>{agent.cwd}</b>
           <span>permissions</span>
-          <b>{agent.permissionMode}</b>
+          <select
+            className="kv-edit"
+            value={agent.permissionMode}
+            title={PERMISSION_MODES.find((p) => p.id === agent.permissionMode)?.blurb}
+            onChange={(e) => send({ type: "agent.update", agentId: agent.id, permissionMode: e.target.value as PermissionMode })}
+          >
+            {PERMISSION_MODES.map((p) => (
+              <option key={p.id} value={p.id} title={p.blurb}>
+                {p.label}
+              </option>
+            ))}
+          </select>
           <span>tools</span>
           <b>{agent.allowedTools.length ? agent.allowedTools.join(", ") : "none"}</b>
           <span>ticket</span>
