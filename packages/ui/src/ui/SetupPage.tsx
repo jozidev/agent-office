@@ -96,10 +96,8 @@ export function SetupPage() {
           ) : null,
         )}
         <section>
-          <h5>Coming with later milestones</h5>
-          <div className="muted">
-            Hooks and statusline install per agent (3), terminal access (4), MCP servers, skills and plugins inventory (6), usage and limits (7).
-          </div>
+          <h5>Coming later</h5>
+          <div className="muted">MCP servers, skills and plugins inventory (6), usage and limits (7).</div>
         </section>
       </div>
     </div>

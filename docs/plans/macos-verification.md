@@ -122,3 +122,16 @@ Note for the docs: the first interactive terminal in a folder hits Claude
 Code's own "Is this a project you trust?" prompt, which the user must answer in
 the terminal before the resumed session appears. Not a bug, but nothing in
 `docs/architecture.md` prepares you for it.
+
+## Left as GitHub issues
+
+| # | Issue | Why not fixed here |
+|---|---|---|
+| [#1](https://github.com/jozidev/agent-office/issues/1) | Hiring into a folder that doesn't exist fails silently | Needs hire-flow validation and modal error handling, not a one-line guard |
+| [#2](https://github.com/jozidev/agent-office/issues/2) | Tooltip shows "0k/0k" tokens while cost reads $0.06 | Cache reads dominate real sessions; needs a display decision |
+| [#3](https://github.com/jozidev/agent-office/issues/3) | `setup.ts` has no tests and needs a seam to get any | Requires injecting homedir and the command runner first |
+
+Also fixed in passing: the CLI ran the server with `logger: false`, which is
+what hid bug 4 behind a blank panel. It now logs at `warn` (set
+`AGENT_OFFICE_DEBUG=1` for full request logging). Stale milestone copy on the
+Setup page was corrected.

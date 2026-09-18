@@ -10,7 +10,10 @@ const port = Number(process.env.PORT ?? 4177);
 const open = !process.argv.includes("--no-open");
 
 const { runner, kind } = await pickRunner((msg: string) => console.log(`[agent-office] ${msg}`));
-const { app } = await createServer({ uiDir, seed: process.env.SEED !== "0", logger: false, runner, runnerKind: kind, port });
+// Silencing the logger entirely hid a server-side pty spawn failure behind a
+// blank terminal panel; "warn" keeps request noise out but lets errors through.
+const logger = process.env.AGENT_OFFICE_DEBUG ? true : { level: "warn" };
+const { app } = await createServer({ uiDir, seed: process.env.SEED !== "0", logger, runner, runnerKind: kind, port });
 await app.listen({ port, host: "127.0.0.1" });
 const url = `http://127.0.0.1:${port}`;
 console.log(`Agent Office running at ${url}`);

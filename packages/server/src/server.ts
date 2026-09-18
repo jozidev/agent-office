@@ -19,7 +19,8 @@ export interface ServerOptions {
   /** absolute path to built UI (index.html); served at / when present */
   uiDir?: string;
   seed?: boolean;
-  logger?: boolean;
+  /** true for Fastify's full request logging, false for silence, or a level object (the CLI uses `{ level: "warn" }` so errors still surface). */
+  logger?: boolean | { level: string };
   /** port this server will listen on; used to build the hook/statusline URLs written into agents' .claude/settings.local.json. Hooks are not installed when omitted. */
   port?: number;
 }

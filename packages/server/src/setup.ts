@@ -121,7 +121,7 @@ export async function runSetupChecks(agents: Agent[], hookHits = 0): Promise<Set
         }
         status = hooked ? "ok" : "warn";
         detail = hooked ? `${cwd} (hooks installed)` : `${cwd} (hooks not installed)`;
-        hint = hooked ? undefined : "Hooks let the office see this agent's status. Installed automatically in milestone 3.";
+        hint = hooked ? undefined : "Hooks let the office see this agent's status. They are installed when you hire, so this usually means the folder was changed afterwards.";
       }
     } catch {
       /* missing */
