@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import type { Agent, RunnerEvent, Ticket } from "@agent-office/shared";
 import type { RunningSession, SessionRunner } from "./runner.js";
 import { expandHome } from "./setup.js";
@@ -192,12 +193,20 @@ export function createStreamParser(emit: (e: RunnerEvent) => void) {
   };
 }
 
+/** A session that never started: keeps the caller's bookkeeping uniform after a failed launch. */
+function inertSession(): RunningSession {
+  return { sessionId: "pending", respond: () => {}, stop: () => {} };
+}
+
 /**
  * Spawns the real `claude` CLI headlessly for one ticket and turns its
  * NDJSON stream into RunnerEvents. See the file header for the exact shapes
  * this was written against.
  */
 export class CliRunner implements SessionRunner {
+  /** `command` is injectable so tests can exercise the spawn-failure path without a real binary. */
+  constructor(private readonly command = "claude") {}
+
   start(agent: Agent, ticket: Ticket, emit: (e: RunnerEvent) => void): RunningSession {
     const prompt = ticket.description ? `${ticket.title}\n\n${ticket.description}` : ticket.title;
     const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
@@ -207,7 +216,15 @@ export class CliRunner implements SessionRunner {
     if (agent.systemPrompt) args.push("--append-system-prompt", agent.systemPrompt);
 
     const cwd = expandHome(agent.cwd);
-    const proc = spawn("claude", args, { cwd, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+
+    // spawn() reports a missing cwd as ENOENT naming the *binary*, which reads
+    // as "claude is not installed" and hides the real cause. Check first.
+    if (!existsSync(cwd)) {
+      emit({ kind: "error", message: `working folder does not exist: ${cwd}` });
+      return inertSession();
+    }
+
+    const proc = spawn(this.command, args, { cwd, detached: true, stdio: ["pipe", "pipe", "pipe"] });
 
     const parser = createStreamParser(emit);
     let stopped = false;
@@ -227,9 +244,19 @@ export class CliRunner implements SessionRunner {
       stderrTail = (stderrTail + chunk).slice(-500);
     });
 
+    // Without this listener a spawn failure (binary missing, cwd vanished
+    // between the check and the spawn, EACCES) is an unhandled "error" event,
+    // which takes the whole server down instead of failing one ticket.
+    let spawnFailed = false;
+    proc.on("error", (err: NodeJS.ErrnoException) => {
+      spawnFailed = true;
+      const reason = err.code === "ENOENT" ? `\`${this.command}\` is not on PATH` : err.message;
+      emit({ kind: "error", message: truncate(`could not start a session: ${reason}`, 500) });
+    });
+
     proc.on("close", (code) => {
       if (stdoutBuf) parser.handleLine(stdoutBuf); // flush a trailing line with no final newline
-      parser.onProcessClose(code, stderrTail, stopped);
+      parser.onProcessClose(code, stderrTail, stopped || spawnFailed);
     });
 
     const killTree = (signal: NodeJS.Signals) => {

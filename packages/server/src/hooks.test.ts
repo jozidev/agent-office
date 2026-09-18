@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -31,6 +31,12 @@ function agentAt(cwd: string): Agent {
 const settingsFile = (cwd: string) => join(cwd, ".claude", "settings.local.json");
 
 describe("installHooks / uninstallHooks", () => {
+  it("refuses a working folder that does not exist instead of creating it", async () => {
+    const missing = join(dir, "not", "created", "yet");
+    await expect(installHooks(agentAt(missing), "http://127.0.0.1:4177")).rejects.toThrow(/working folder does not exist/);
+    await expect(stat(missing)).rejects.toThrow();
+  });
+
   it("writes hooks for every documented event plus a statusLine, all marked", async () => {
     const agent = agentAt(dir);
     await installHooks(agent, "http://127.0.0.1:4177");

@@ -3,7 +3,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { RunnerEvent } from "@agent-office/shared";
-import { createStreamParser } from "./cliRunner.js";
+import type { Agent, Ticket } from "@agent-office/shared";
+import { CliRunner, createStreamParser } from "./cliRunner.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string) => readFileSync(join(here, "__fixtures__", name), "utf8");
@@ -113,5 +114,44 @@ describe("createStreamParser", () => {
       parser.handleLine('{"type":"assistant","message":{"content":[{"type":"future_block_type"}]}}');
     }).not.toThrow();
     expect(events).toEqual([]);
+  });
+});
+
+/**
+ * A spawn that never gets off the ground (missing binary, missing working
+ * folder) used to reach Node as an unhandled ChildProcess "error" event and
+ * take the whole server down; it must fail just the one session instead.
+ */
+describe("CliRunner launch failures", () => {
+  const agent = (cwd: string): Agent =>
+    ({
+      id: "a1",
+      name: "Ada",
+      role: "coder",
+      cwd,
+      model: "sonnet",
+      permissionMode: "acceptEdits",
+      allowedTools: ["Read"],
+      systemPrompt: "",
+    }) as Agent;
+  const ticket = { id: "t1", title: "do a thing", description: "" } as Ticket;
+
+  const startAndCollect = async (runner: CliRunner, a: Agent) => {
+    const events: RunnerEvent[] = [];
+    runner.start(a, ticket, (e) => events.push(e));
+    await new Promise((r) => setTimeout(r, 300));
+    return events;
+  };
+
+  it("reports a missing working folder without spawning", async () => {
+    const events = await startAndCollect(new CliRunner(), agent("/definitely/not/a/folder/here"));
+    expect(events).toEqual([{ kind: "error", message: "working folder does not exist: /definitely/not/a/folder/here" }]);
+  });
+
+  it("reports a missing binary once, and does not throw", async () => {
+    const events = await startAndCollect(new CliRunner("agent-office-no-such-binary"), agent(here));
+    const errors = events.filter((e) => e.kind === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ message: expect.stringContaining("is not on PATH") });
   });
 });

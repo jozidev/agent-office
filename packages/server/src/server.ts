@@ -28,7 +28,7 @@ export async function createServer(opts: ServerOptions = {}) {
   const serverUrl = opts.port ? `http://127.0.0.1:${opts.port}` : undefined;
   const office = new Office(opts.runner ?? new MockRunner(), { serverUrl });
   const runnerKind: RunnerKind = opts.runnerKind ?? (opts.runner ? "cli" : "mock");
-  if (opts.seed) seed(office);
+  if (shouldSeed(opts.seed ?? false, runnerKind, process.env.SEED)) seed(office);
 
   const app = Fastify({ logger: opts.logger ?? true });
   await app.register(websocket);
@@ -123,6 +123,18 @@ function handle(office: Office, m: ClientMessage): string | undefined {
       office.stopSession(m.agentId);
       return;
   }
+}
+
+/**
+ * Demo data is for the mock runner only. Under the real CLI runner the seeded
+ * agents point at folders like ~/code/shop-api that don't exist on the user's
+ * machine, and seed() assigns their tickets straight away — which means hook
+ * config written into invented folders and a real `claude` spawned in a cwd
+ * that isn't there. SEED=1 forces it anyway for deliberate demos.
+ */
+export function shouldSeed(seedRequested: boolean, runnerKind: RunnerKind, seedEnv: string | undefined): boolean {
+  if (!seedRequested) return false;
+  return runnerKind === "mock" || seedEnv === "1";
 }
 
 /** Demo data so the office is not empty on first run. */

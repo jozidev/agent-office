@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Agent, RunnerEvent } from "@agent-office/shared";
 import { expandHome } from "./setup.js";
@@ -90,6 +90,13 @@ async function writeSettings(path: string, settings: SettingsFile): Promise<void
  * ever add our own group, or replace a statusLine that is already ours.
  */
 export async function installHooks(agent: Agent, serverUrl: string): Promise<void> {
+  // The agent's folder must already exist. mkdir(recursive) below would happily
+  // invent the whole path, so a typo in the hire form would scatter .claude
+  // folders across the user's disk instead of failing visibly.
+  const cwd = expandHome(agent.cwd);
+  const dir = await stat(cwd).catch(() => null);
+  if (!dir?.isDirectory()) throw new Error(`working folder does not exist: ${cwd}`);
+
   const path = settingsPath(agent);
   const settings = await readSettings(path);
   const hooks = { ...(settings.hooks ?? {}) };
