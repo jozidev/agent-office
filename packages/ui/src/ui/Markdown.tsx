@@ -11,18 +11,18 @@ import { withFileLinks } from "./FilePath";
  */
 
 /** Inline `code`, **bold**, and any absolute path, which becomes clickable. */
-export function inline(text: string, keyPrefix: string): React.ReactNode[] {
+export function inline(text: string, keyPrefix: string, baseDir?: string): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   const pattern = /`([^`]+)`|\*\*([^*]+)\*\*/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = pattern.exec(text))) {
-    if (m.index > last) out.push(...withFileLinks(text.slice(last, m.index), `${keyPrefix}-${last}`));
-    if (m[1] !== undefined) out.push(<code key={`${keyPrefix}-${m.index}`}>{withFileLinks(m[1], `c${m.index}`)}</code>);
+    if (m.index > last) out.push(...withFileLinks(text.slice(last, m.index), `${keyPrefix}-${last}`, baseDir));
+    if (m[1] !== undefined) out.push(<code key={`${keyPrefix}-${m.index}`}>{withFileLinks(m[1], `c${m.index}`, baseDir)}</code>);
     else out.push(<strong key={`${keyPrefix}-${m.index}`}>{m[2]}</strong>);
     last = m.index + m[0].length;
   }
-  if (last < text.length) out.push(...withFileLinks(text.slice(last), `${keyPrefix}-${last}`));
+  if (last < text.length) out.push(...withFileLinks(text.slice(last), `${keyPrefix}-${last}`, baseDir));
   return out;
 }
 
@@ -70,7 +70,7 @@ export function blocks(src: string): Block[] {
   return out;
 }
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, baseDir }: { text: string; baseDir?: string }) {
   return (
     <>
       {blocks(text).map((b, i) => {
@@ -78,14 +78,14 @@ export function Markdown({ text }: { text: string }) {
         if (b.kind === "code") return <pre key={i}>{b.text}</pre>;
         if (b.kind === "head") {
           const Tag = (b.level && b.level <= 2 ? "h4" : "h5") as "h4" | "h5";
-          return <Tag key={i}>{inline(b.text, `h${i}`)}</Tag>;
+          return <Tag key={i}>{inline(b.text, `h${i}`, baseDir)}</Tag>;
         }
-        if (b.kind === "quote") return <blockquote key={i}>{inline(b.text, `q${i}`)}</blockquote>;
-        if (b.kind === "para") return <p key={i}>{inline(b.text, `p${i}`)}</p>;
+        if (b.kind === "quote") return <blockquote key={i}>{inline(b.text, `q${i}`, baseDir)}</blockquote>;
+        if (b.kind === "para") return <p key={i}>{inline(b.text, `p${i}`, baseDir)}</p>;
         return (
           <div key={i} className="md-item">
             <span className="md-marker">{b.kind === "bullet" ? "•" : "›"}</span>
-            <span>{inline(b.text, `l${i}`)}</span>
+            <span>{inline(b.text, `l${i}`, baseDir)}</span>
           </div>
         );
       })}

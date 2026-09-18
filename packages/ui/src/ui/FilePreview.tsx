@@ -73,7 +73,7 @@ export function FilePreview({ path, onClose }: { path: string; onClose: () => vo
         <div className="preview-body">
           {!body && <div className="preview-note">reading…</div>}
           {body?.error && <div className="preview-note preview-error">{body.error}</div>}
-          {body && !body.error && (isMarkdown(path) ? <Markdown text={body.content} /> : <pre>{body.content}</pre>)}
+          {body && !body.error && (isMarkdown(path) ? <Markdown text={body.content} baseDir={path.replace(/\/[^/]*$/, "")} /> : <pre>{body.content}</pre>)}
           {body?.truncated && <div className="preview-note">…truncated; open it externally to read the rest.</div>}
         </div>
       </div>

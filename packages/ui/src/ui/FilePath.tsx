@@ -1,17 +1,15 @@
 import { useState } from "react";
 import { FilePreview, isPreviewable } from "./FilePreview";
+import { DELIMITERS, resolvePath, stripTrailingPunctuation } from "./filePaths";
 
 /**
  * Agents write plans and reports constantly, and the office showed their
- * paths as dead text — reading one meant copying it into a terminal. Any
- * absolute path in the log or in an agent's question is now a link.
+ * paths as dead text — reading one meant copying it into a terminal. Any path
+ * in a question or a log line is now a link.
  *
  * Text a model wrote is read in the app; anything else is handed to the OS.
  * Shift-click always reveals it in the file manager instead.
  */
-
-/** Absolute paths, including ~-relative ones. Trailing punctuation stays out of the match. */
-const PATH_RE = /((?:~|\/)[\w.\-/@+]*[\w\-/@+])/g;
 
 function launch(path: string, mode: "open" | "reveal") {
   void fetch("/api/open", {
@@ -26,7 +24,7 @@ function launch(path: string, mode: "open" | "reveal") {
   });
 }
 
-export function FilePath({ path }: { path: string }) {
+export function FilePath({ path, label }: { path: string; label?: string }) {
   const [preview, setPreview] = useState(false);
   const previewable = isPreviewable(path);
 
@@ -34,7 +32,7 @@ export function FilePath({ path }: { path: string }) {
     <>
       <button
         className="file-link"
-        title={previewable ? `${path}\nclick to read · shift-click to reveal` : `${path}\nclick to open · shift-click to reveal`}
+        title={`${path}\n${previewable ? "click to read" : "click to open"} · shift-click to reveal`}
         onClick={(e) => {
           e.stopPropagation();
           if (e.shiftKey) launch(path, "reveal");
@@ -42,26 +40,35 @@ export function FilePath({ path }: { path: string }) {
           else launch(path, "open");
         }}
       >
-        {path}
+        {label ?? path}
       </button>
       {preview && <FilePreview path={path} onClose={() => setPreview(false)} />}
     </>
   );
 }
 
-/** Splits text into plain runs and clickable paths. */
-export function withFileLinks(text: string, keyPrefix: string): React.ReactNode[] {
+/**
+ * Splits text into plain runs and clickable paths. `baseDir` is the agent's
+ * working folder, which is what a relative path in its output is relative to.
+ */
+export function withFileLinks(text: string, keyPrefix: string, baseDir?: string): React.ReactNode[] {
   const out: React.ReactNode[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  PATH_RE.lastIndex = 0;
-  while ((m = PATH_RE.exec(text))) {
-    // A lone "/" or a bare "~" is punctuation, not a path worth linking.
-    if (m[0].length < 3) continue;
-    if (m.index > last) out.push(text.slice(last, m.index));
-    out.push(<FilePath key={`${keyPrefix}-${m.index}`} path={m[0]} />);
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out.length ? out : [text];
+  let linked = false;
+
+  text.split(DELIMITERS).forEach((token, i) => {
+    if (!token) return;
+    const trimmed = stripTrailingPunctuation(token);
+    const resolved = trimmed ? resolvePath(trimmed, baseDir) : null;
+    if (!resolved) {
+      out.push(token);
+      return;
+    }
+    linked = true;
+    // The label stays exactly as the agent wrote it; only the target is resolved.
+    out.push(<FilePath key={`${keyPrefix}-${i}`} path={resolved} label={trimmed} />);
+    const tail = token.slice(trimmed.length);
+    if (tail) out.push(tail);
+  });
+
+  return linked ? out : [text];
 }

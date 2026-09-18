@@ -31,7 +31,7 @@ export function AgentPanel() {
         <button onClick={() => setSelected(null)}>×</button>
       </header>
       <div className="body">
-        {waiting && <AskCard agentName={agent.name} question={question} answerIn={state.answerIn} onSend={answer} />}
+        {waiting && <AskCard agentName={agent.name} question={question} answerIn={state.answerIn} baseDir={agent.cwd} onSend={answer} />}
         <details className="kv-wrap" open={!waiting}>
           <summary>details</summary>
           <div className="kv">
@@ -81,7 +81,7 @@ export function AgentPanel() {
 
         <div className="log" style={{ marginTop: 8 }}>
           {state.log.length
-            ? state.log.map((line, i) => <div key={i}>{withFileLinks(line, `log${i}`)}</div>)
+            ? state.log.map((line, i) => <div key={i}>{withFileLinks(line, `log${i}`, agent.cwd)}</div>)
             : "nothing yet"}
         </div>
 

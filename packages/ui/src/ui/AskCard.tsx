@@ -51,11 +51,14 @@ export function AskCard({
   agentName,
   question,
   answerIn,
+  baseDir,
   onSend,
 }: {
   agentName: string;
   question: string;
   answerIn: "panel" | "terminal" | null;
+  /** The agent's working folder: what a relative path in its output means. */
+  baseDir: string;
   onSend: (text: string) => void;
 }) {
   const [reply, setReply] = useState("");
@@ -83,7 +86,7 @@ export function AskCard({
         {agentName} is asking
       </header>
       <div className="ask-body">
-        <Markdown text={question} />
+        <Markdown text={question} baseDir={baseDir} />
       </div>
       <div className="ask-reply">
         <textarea
