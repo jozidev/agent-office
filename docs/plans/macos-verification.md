@@ -190,7 +190,7 @@ plugins, subagent definitions) and 7 (usage collector and office gauges).
 
 **Open before starting 6**, all filed with full context:
 
-- [#1](https://github.com/jozidev/agent-office/issues/1) hiring into a folder that doesn't exist fails silently
+- ~~[#1](https://github.com/jozidev/agent-office/issues/1) hiring into a folder that doesn't exist fails silently~~ — fixed, see "Terminal and hire flow" below
 - [#2](https://github.com/jozidev/agent-office/issues/2) tooltip reads "0k/0k" tokens while cost reads $0.06
 - [#3](https://github.com/jozidev/agent-office/issues/3) `setup.ts` has no tests and needs a seam first
 
@@ -202,3 +202,42 @@ since that milestone owns config management.
 **Note for the next session**: the user had notes to pass on that did not come
 through the terminal (the message arrived as "some notes:" with nothing after
 it, twice). Ask for them before picking up new work.
+
+## Terminal and hire flow (2026-09-18, second session)
+
+Feedback after using the app for real: the terminal felt laggy, "pop out" was
+clipped by the panel, and hiring let you pick neither the model nor the folder.
+
+**Why the terminal was slow.** Three things stacked. xterm.js was on its DOM
+renderer, which is the worst case for a TUI that repaints on every keystroke;
+the server sent one WebSocket frame per `pty.onData` chunk, so one repaint
+became dozens of frames; and `convertEol: true` rewrote `\n` for a pty that
+already sends `\r\n`. Now: WebGL (falling back to DOM on context loss),
+~4ms output batching, no convertEol, fits coalesced per frame, and the pty
+spawns at the size the client already measured instead of 100x30-then-reflow.
+
+**Why "pop out" was clipped.** `.float-window` is `position: absolute` and was
+rendered inside `.panel`, which is `overflow: hidden` and 380px wide. Portalled
+to `<body>` now. There are three ways out of the panel, because they serve
+different moments: `float` (in-page), `window` (a real OS window at
+`/terminal/:agentId`, works everywhere), and `open in <your terminal>`.
+
+**The native handoff assumes no particular terminal.** `nativeTerminal.ts`
+probes for every terminal installed, the choice is picked from a dropdown and
+remembered, and a machine with no GUI terminal hands back the command to paste.
+Resolution order is saved choice, then `$AGENT_OFFICE_TERMINAL_APP`, then
+detection — the saved choice wins deliberately, or picking in the UI would do
+nothing on a machine that exports the env var. On handoff the in-app pty is
+released, because Claude Code will not resume one session in two places.
+Windows support is written from the documented flags and has not been run.
+
+**Hiring** gained a model picker (pinned ids, Opus 5 default — an agent keeps
+the model it was hired with) and a folder browser backed by `/api/fs/list`.
+Typed paths are checked before the hire goes through, which is what #1 needed.
+
+**New seam:** a `settings` key/value table in `store.ts`. Milestones 6 and 7
+both want machine-level preferences; this is where they go.
+
+**Still true for the next session:** milestone 6 (supply closet) and 7 (usage
+gauges) are next, #2 and #3 are still open, and the stranded-hooks loose end is
+still unfiled.
