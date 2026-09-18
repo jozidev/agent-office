@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { Html } from "@react-three/drei";
+import { Furniture } from "./Furniture";
 import { roomSize } from "./layout";
 
 /** Floor, two back walls, and the wall props that will become usage gauges (M7). */
@@ -28,18 +30,18 @@ export function Room({ agentCount }: { agentCount: number }) {
       <Prop position={[w / 4, 1.7, -d / 2 + 0.1]} size={[0.5, 0.5, 0.04]} color="#f4f4f4" label="clock" round />
       <Prop position={[w / 2 - 1.2, 1.0, -d / 2 + 0.12]} size={[0.9, 2.0, 0.08]} color="#4b5570" label="server room" />
       <Prop position={[-w / 2 + 0.12, 1.0, d / 4]} size={[0.08, 2.0, 0.9]} color="#8a5a3c" label="supply closet" />
-      {/* coffee machine on the floor near the left wall */}
-      <group position={[-w / 2 + 0.6, 0, -d / 4]}>
-        <mesh position={[0, 0.45, 0]}>
-          <boxGeometry args={[0.5, 0.9, 0.5]} />
-          <meshStandardMaterial color="#6d7382" />
-        </mesh>
-        <mesh position={[0, 0.5, 0.26]}>
-          <boxGeometry args={[0.3, 0.3, 0.02]} />
-          <meshStandardMaterial color="#c98b3c" emissive="#c98b3c" emissiveIntensity={0.3} />
-        </mesh>
-        <Label text="coffee" position={[0, 1.1, 0]} />
-      </group>
+      <Suspense fallback={null}>
+        {/* coffee corner along the left wall */}
+        <group position={[-w / 2 + 0.7, 0, -d / 4]} rotation={[0, Math.PI / 2, 0]}>
+          <Furniture name="cabinetTelevision" position={[-0.6, 0, 0]} />
+          <Furniture name="kitchenCoffeeMachine" position={[-0.25, 0.55, 0.05]} />
+          <Label text="coffee" position={[0, 1.3, 0]} />
+        </group>
+        <Furniture name="pottedPlant" position={[w / 2 - 0.6, 0, -d / 2 + 0.6]} />
+        <Furniture name="plantSmall1" position={[-w / 2 + 0.5, 0, d / 2 - 0.8]} />
+        <Furniture name="bookcaseOpen" position={[-w / 2 + 0.2, 0, d / 4 + 1.4]} rotation={[0, Math.PI / 2, 0]} />
+        <Furniture name="lampSquareFloor" position={[w / 2 - 0.5, 0, d / 2 - 0.6]} />
+      </Suspense>
     </group>
   );
 }

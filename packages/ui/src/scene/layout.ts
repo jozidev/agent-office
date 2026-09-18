@@ -14,5 +14,5 @@ export function deskPosition(desk: number, total: number): [number, number, numb
 
 export function roomSize(total: number): { w: number; d: number } {
   const rows = Math.max(2, Math.ceil(Math.max(total, 1) / COLS));
-  return { w: COLS * SPACING_X + 4, d: rows * SPACING_Z + 4 };
+  return { w: COLS * SPACING_X + 2.5, d: rows * SPACING_Z + 3 };
 }

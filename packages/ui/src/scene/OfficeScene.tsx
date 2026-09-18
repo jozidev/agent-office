@@ -4,13 +4,16 @@ import { useOffice } from "../store";
 import { Desk } from "./Desk";
 import { Room } from "./Room";
 import { deskPosition } from "./layout";
+import { preloadModels } from "./models";
+
+preloadModels();
 
 export function OfficeScene() {
   const agents = useOffice((s) => s.agents);
   const states = useOffice((s) => s.states);
   const setSelected = useOffice((s) => s.setSelected);
   const list = Object.values(agents);
-  const zoom = Math.max(34, 76 - list.length * 3);
+  const zoom = Math.max(36, 84 - list.length * 3);
 
   return (
     <Canvas shadows dpr={[1, 2]} onPointerMissed={() => setSelected(null)} className="canvas">

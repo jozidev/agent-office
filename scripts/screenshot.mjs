@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 
 const out = process.argv[2] ?? 'screenshots';
-const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width: 1400, height: 860 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
