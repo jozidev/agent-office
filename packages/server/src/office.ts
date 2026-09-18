@@ -32,6 +32,12 @@ const emptyMetrics = (): SessionMetrics => ({
 });
 
 const now = () => new Date().toISOString();
+/** The log is a scrolling history, so it gets a summary; the full text lives on `state.question`. */
+function truncateLog(s: string): string {
+  const line = s.replace(/\s+/g, " ").trim();
+  return line.length > 120 ? `${line.slice(0, 119)}\u2026` : line;
+}
+
 const LOG_LIMIT = 60;
 
 /**
@@ -73,7 +79,8 @@ export class Office {
         status: "idle",
         sessionId: sessionIds.get(agent.id) ?? null,
         ticketId: null,
-        metrics: emptyMetrics(),
+        question: null,
+      metrics: emptyMetrics(),
         subagents: [],
         log: ["back at their desk"],
       });
@@ -141,6 +148,7 @@ export class Office {
       status: "idle",
       sessionId: null,
       ticketId: null,
+      question: null,
       metrics: emptyMetrics(),
       subagents: [],
       log: [`hired as ${preset.label}`],
@@ -264,6 +272,7 @@ export class Office {
       if (t && t.status !== "done") this.updateTicket(t.id, { status: "backlog", assignedAgentId: null, sessionId: null });
     }
     state.status = "idle";
+    state.question = null;
     state.ticketId = null;
     state.sessionId = null;
     state.subagents = [];
@@ -315,6 +324,7 @@ export class Office {
 
     if (state.status === "waiting") {
       state.status = "thinking";
+      state.question = null;
       this.pushLog(state, `you: ${text}`);
       if (state.ticketId) this.updateTicket(state.ticketId, { status: "in_progress" });
       this.broadcast({ type: "state.update", state });
@@ -359,7 +369,8 @@ export class Office {
         break;
       case "waiting":
         state.status = "waiting";
-        this.pushLog(state, `asks: ${e.prompt}`);
+        state.question = e.prompt;
+        this.pushLog(state, `asks: ${truncateLog(e.prompt)}`);
         if (ticketId) this.updateTicket(ticketId, { status: "waiting" });
         break;
       case "usage":
@@ -426,6 +437,7 @@ export class Office {
         }, 6000);
         break;
     }
+    if (state.status !== "waiting") state.question = null;
     this.broadcast({ type: "state.update", state });
   }
 
@@ -455,7 +467,8 @@ export class Office {
           state.sessionId = e.sessionId;
           this.store.saveAgentSession(agentId, e.sessionId);
         }
-        state.status = "thinking";
+        // Opening a terminal to read the question must not answer it.
+        if (state.status !== "waiting") state.status = "thinking";
         break;
       case "thinking":
         state.status = "thinking";
@@ -468,7 +481,8 @@ export class Office {
         break;
       case "waiting":
         state.status = "waiting";
-        this.pushLog(state, `asks: ${e.prompt}`);
+        state.question = e.prompt;
+        this.pushLog(state, `asks: ${truncateLog(e.prompt)}`);
         break;
       case "subagent_start": {
         if (e.id && state.subagents.some((s) => s.id === e.id)) break;

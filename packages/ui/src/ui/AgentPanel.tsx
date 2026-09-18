@@ -1,6 +1,7 @@
-import { useState } from "react";
 import { CLAUDE_MODELS, PERMISSION_MODES, ROLE_PRESETS, type PermissionMode } from "@agent-office/shared";
 import { useOffice, statusColor, statusLabel } from "../store";
+import { AskCard } from "./AskCard";
+import { withFileLinks } from "./FilePath";
 import { TerminalPanel } from "./Terminal";
 import { ChatPanel } from "./Chat";
 
@@ -11,10 +12,14 @@ export function AgentPanel() {
   const ticket = useOffice((s) => (state?.ticketId ? s.tickets[state.ticketId] : undefined));
   const send = useOffice((s) => s.send);
   const setSelected = useOffice((s) => s.setSelected);
-  const [reply, setReply] = useState("");
 
   if (!agent || !state) return null;
   const preset = ROLE_PRESETS[agent.role];
+  // Keyed on the question rather than the status: opening this agent's
+  // terminal to read the question starts a session, and that must not make the
+  // thing you are reading disappear.
+  const question = state.question ?? (state.status === "waiting" ? (state.log[state.log.length - 1]?.replace(/^\S+\s(asks:\s)?/, "") ?? "") : "");
+  const waiting = Boolean(question);
 
   return (
     <aside className="panel">
@@ -26,7 +31,10 @@ export function AgentPanel() {
         <button onClick={() => setSelected(null)}>×</button>
       </header>
       <div className="body">
-        <div className="kv">
+        {waiting && <AskCard agentName={agent.name} question={question} onSend={answer} />}
+        <details className="kv-wrap" open={!waiting}>
+          <summary>details</summary>
+          <div className="kv">
           <span>status</span>
           <b>{statusLabel[state.status]}</b>
           <span>model</span>
@@ -63,25 +71,18 @@ export function AgentPanel() {
           <span>ticket</span>
           <b>{ticket ? ticket.title : "none"}</b>
           <span>session</span>
-          <b>{state.sessionId ?? "-"}</b>
-        </div>
-
-        {state.status === "waiting" && (
-          <div>
-            <div style={{ color: "var(--warn)" }}>{state.log[state.log.length - 1]?.replace(/^\S+\s/, "")}</div>
-            <div className="respond">
-              <input value={reply} onChange={(e) => setReply(e.target.value)} placeholder="your answer" onKeyDown={(e) => e.key === "Enter" && answer()} />
-              <button className="primary" onClick={answer}>
-                Send
-              </button>
-            </div>
+          <b className="ellipsis" title={state.sessionId ?? ""}>
+            {state.sessionId ?? "-"}
+          </b>
           </div>
-        )}
+        </details>
 
         {agent.uiMode === "chat" ? <ChatPanel agentId={agent.id} agentName={agent.name} /> : <TerminalPanel agentId={agent.id} agentName={agent.name} />}
 
         <div className="log" style={{ marginTop: 8 }}>
-          {state.log.length ? state.log.join("\n") : "nothing yet"}
+          {state.log.length
+            ? state.log.map((line, i) => <div key={i}>{withFileLinks(line, `log${i}`)}</div>)
+            : "nothing yet"}
         </div>
 
         <div className="actions">
@@ -96,9 +97,8 @@ export function AgentPanel() {
     </aside>
   );
 
-  function answer() {
+  function answer(text: string) {
     if (!agent) return;
-    send({ type: "agent.respond", agentId: agent.id, text: reply || "ok" });
-    setReply("");
+    send({ type: "agent.respond", agentId: agent.id, text });
   }
 }

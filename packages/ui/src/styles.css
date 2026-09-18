@@ -78,6 +78,100 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
 .panel .kv .kv-edit:hover { border-color: var(--line); background: var(--bg); }
 .panel .kv .kv-edit:focus { border-color: var(--accent); background: var(--bg); outline: none; }
 .panel .respond { display: flex; gap: 6px; margin-top: 8px; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Config is reference material; while an agent is waiting it gets out of the way. */
+.kv-wrap { margin-bottom: 12px; }
+.kv-wrap > summary {
+  cursor: pointer; color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .06em; padding: 4px 0; list-style: none;
+}
+.kv-wrap > summary::-webkit-details-marker { display: none; }
+.kv-wrap > summary::before { content: "\25b8 "; display: inline-block; transition: transform .12s; }
+.kv-wrap[open] > summary::before { transform: rotate(90deg); }
+.kv-wrap[open] > summary { margin-bottom: 6px; }
+
+/* The ask: the one thing you opened this panel to read. */
+.ask {
+  border: 1px solid var(--warn); border-radius: 8px; background: rgba(242, 193, 78, .06);
+  margin-bottom: 12px; display: flex; flex-direction: column; overflow: hidden;
+}
+.ask > header {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--warn);
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  border-bottom: 1px solid rgba(242, 193, 78, .25);
+}
+.ask-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: none; }
+/* Prose, not a log line: sentence-length measure, real leading, room to scroll. */
+.ask-body {
+  padding: 10px 12px; max-height: 44vh; overflow: auto; font-size: 13px; line-height: 1.55;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text);
+}
+.ask-body p { margin: 0 0 8px; }
+.ask-body h5 { margin: 10px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.ask-body h5:first-child { margin-top: 0; }
+.ask-body code {
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 4px;
+}
+.ask-reply { border-top: 1px solid rgba(242, 193, 78, .25); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.ask-reply textarea { min-height: 52px; max-height: 160px; font-size: 12px; }
+.ask-actions { display: flex; gap: 6px; }
+.ask-actions .primary { margin-left: auto; }
+
+/* A path is a link, but inside a log line it must not look like a button. */
+.file-link {
+  display: inline; background: none; border: none; padding: 0; margin: 0; font: inherit;
+  color: var(--accent); text-decoration: underline; text-decoration-style: dotted;
+  text-underline-offset: 2px; cursor: pointer; text-align: left; text-transform: none; letter-spacing: 0;
+  word-break: break-all;
+}
+.file-link:hover { text-decoration-style: solid; border-color: transparent; }
+
+/* Shared markdown rendering: the ask card and the file preview. */
+.md-item { display: flex; gap: 8px; margin: 0 0 5px; }
+.md-marker { color: var(--warn); flex: none; }
+.ask-body p, .preview-body p { margin: 0 0 8px; }
+.ask-body h4, .preview-body h4 { margin: 12px 0 6px; font-size: 14px; }
+.ask-body h5, .preview-body h5 { margin: 10px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.ask-body > :first-child, .preview-body > :first-child { margin-top: 0; }
+.ask-body code, .preview-body code {
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 4px;
+}
+.ask-body pre, .preview-body pre {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+  overflow: auto; font-family: ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.45; margin: 0 0 10px;
+}
+.ask-body blockquote, .preview-body blockquote {
+  margin: 0 0 8px; padding-left: 10px; border-left: 2px solid var(--line); color: var(--muted);
+}
+.ask-body hr, .preview-body hr { border: none; border-top: 1px solid var(--line); margin: 12px 0; }
+
+/* File preview: a reading window, sized for prose, over the whole app. */
+.preview-bg {
+  position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center; padding: 40px;
+}
+.preview {
+  width: min(820px, 100%); max-height: 100%; background: var(--panel-solid);
+  border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.preview > header {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  border-bottom: 1px solid var(--line); background: var(--panel-2);
+}
+.preview-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.preview-title b { font-size: 13px; }
+.preview-title span { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.preview > header button { padding: 3px 8px; font-size: 11px; }
+.preview-body {
+  padding: 16px 20px; overflow: auto; font-size: 13.5px; line-height: 1.6;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.preview-note { color: var(--muted); font-size: 12px; padding: 4px 0; }
+.preview-error { color: var(--bad); }
 .terminal-panel, .chat-panel {
   background: #0d0f14; border: 1px solid var(--line); border-radius: 6px; margin-top: 12px;
   display: flex; flex-direction: column; overflow: hidden;

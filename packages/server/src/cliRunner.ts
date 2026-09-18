@@ -60,15 +60,22 @@ function summarizeToolInput(input: unknown): string {
  */
 const ASK_TOOLS = new Set(["ExitPlanMode", "AskUserQuestion"]);
 
+/**
+ * Log lines get 300 characters because they scroll past. A question does not:
+ * it is the one thing you have to read to answer, and a plan cut off at
+ * "Findings, worst first…" is useless.
+ */
+const QUESTION_LIMIT = 8000;
+
 /** The question to show on the agent's bubble, dug out of the ask tool's input. */
 function askPrompt(tool: string, input: unknown): string {
   const i = (input ?? {}) as Record<string, unknown>;
   if (tool === "AskUserQuestion") {
     const questions = Array.isArray(i["questions"]) ? (i["questions"] as Record<string, unknown>[]) : [];
     const first = questions[0]?.["question"];
-    if (typeof first === "string") return truncate(first, 300);
+    if (typeof first === "string") return truncate(first, QUESTION_LIMIT);
   }
-  if (typeof i["plan"] === "string") return truncate(i["plan"] as string, 300);
+  if (typeof i["plan"] === "string") return truncate(i["plan"] as string, QUESTION_LIMIT);
   return `${tool} needs your answer`;
 }
 
@@ -206,7 +213,7 @@ export function createStreamParser(emit: (e: RunnerEvent) => void, opts: StreamP
     }
     // A clean result after an ask — or from an agent that can only propose —
     // is the headless CLI saying "I can't prompt you, so I stopped".
-    if (ask || opts.proposesOnly) emit({ kind: "waiting", prompt: ask || truncate(text, 300) });
+    if (ask || opts.proposesOnly) emit({ kind: "waiting", prompt: ask || truncate(text, QUESTION_LIMIT) });
     else emit({ kind: "done", summary: truncate(text, 300) });
   };
 

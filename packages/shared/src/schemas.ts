@@ -97,6 +97,8 @@ export const AgentState = z.object({
   status: AgentStatus,
   sessionId: z.string().nullable(),
   ticketId: z.string().nullable(),
+  /** What the agent is waiting to hear, in full. Set with `waiting`, cleared when it moves on. */
+  question: z.string().nullable().default(null),
   metrics: SessionMetrics,
   subagents: z.array(Subagent),
   /** last N event lines for the panel */
