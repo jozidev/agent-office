@@ -20,8 +20,17 @@ export interface Store {
   deleteAgent(agentId: string): void;
   saveTicket(ticket: Ticket): void;
   deleteTicket(ticketId: string): void;
+  /** Machine-level preferences (which terminal app to open, where you last hired from). */
+  getSetting(key: string): string | null;
+  setSetting(key: string, value: string): void;
   close(): void;
 }
+
+/** Keys used with {@link Store.getSetting}; here so a typo cannot silently read nothing. */
+export const SETTINGS = {
+  terminalApp: "terminalApp",
+  lastHireDir: "lastHireDir",
+} as const;
 
 /** Used by tests and by `AGENT_OFFICE_PERSIST=0`: the office works, nothing is written. */
 export class MemoryStore implements Store {
@@ -39,6 +48,10 @@ export class MemoryStore implements Store {
   deleteAgent(): void {}
   saveTicket(): void {}
   deleteTicket(): void {}
+  getSetting(_key: string): string | null {
+    return null;
+  }
+  setSetting(_key: string, _value: string): void {}
   close(): void {}
 }
 
@@ -116,6 +129,10 @@ export class SqliteStore implements Store {
         sessionId TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
       );
     `);
   }
@@ -221,6 +238,17 @@ export class SqliteStore implements Store {
 
   deleteTicket(ticketId: string): void {
     this.db.prepare("DELETE FROM tickets WHERE id = ?").run(ticketId);
+  }
+
+  getSetting(key: string): string | null {
+    const row = this.db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+  }
+
+  setSetting(key: string, value: string): void {
+    this.db
+      .prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .run(key, value);
   }
 
   close(): void {

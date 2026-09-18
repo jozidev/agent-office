@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Agent, Ticket } from "@agent-office/shared";
 import { Office } from "./office.js";
 import { MockRunner } from "./mockRunner.js";
-import { SqliteStore, defaultDbPath, statusAfterRestart } from "./store.js";
+import { MemoryStore, SETTINGS, SqliteStore, defaultDbPath, statusAfterRestart } from "./store.js";
 
 let dir: string;
 let store: SqliteStore;
@@ -189,5 +189,34 @@ describe("Office restore", () => {
     const second = new Office(new MockRunner(), { store });
     second.restore();
     expect(second.snapshot().tickets).toEqual([]);
+  });
+});
+
+describe("settings", () => {
+  it("remembers a preference across a restart", () => {
+    store.setSetting(SETTINGS.terminalApp, "iterm");
+    store.setSetting(SETTINGS.lastHireDir, "~/code/app");
+    store.close();
+
+    const reopened = new SqliteStore(join(dir, "office.db"));
+    expect(reopened.getSetting(SETTINGS.terminalApp)).toBe("iterm");
+    expect(reopened.getSetting(SETTINGS.lastHireDir)).toBe("~/code/app");
+    reopened.close();
+  });
+
+  it("overwrites rather than duplicating a key", () => {
+    store.setSetting(SETTINGS.terminalApp, "iterm");
+    store.setSetting(SETTINGS.terminalApp, "terminal");
+    expect(store.getSetting(SETTINGS.terminalApp)).toBe("terminal");
+  });
+
+  it("returns null for a key that was never set", () => {
+    expect(store.getSetting("never-written")).toBeNull();
+  });
+
+  it("no-ops under MemoryStore, so a throwaway office keeps no preferences", () => {
+    const mem = new MemoryStore();
+    mem.setSetting(SETTINGS.terminalApp, "iterm");
+    expect(mem.getSetting(SETTINGS.terminalApp)).toBeNull();
   });
 });

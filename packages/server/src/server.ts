@@ -10,8 +10,10 @@ import { runSetupChecks } from "./setup.js";
 import { hookToEvents, type HookPayload } from "./hooks.js";
 import type { RunnerKind } from "./pickRunner.js";
 import { registerTerminalRoutes } from "./terminal.js";
+import { registerNativeTerminalRoutes } from "./nativeTerminal.js";
+import { registerFsRoutes } from "./fsBrowse.js";
 import { registerChatRoutes } from "./chat.js";
-import { MemoryStore, SqliteStore, type Store } from "./store.js";
+import { MemoryStore, SETTINGS, SqliteStore, type Store } from "./store.js";
 
 export interface ServerOptions {
   runner?: SessionRunner;
@@ -52,8 +54,13 @@ export async function createServer(opts: ServerOptions = {}) {
   app.get("/api/setup", async () => runSetupChecks(office.snapshot().agents, office.hookHits));
   app.get("/api/runner", async () => ({ runner: runnerKind }));
 
-  registerTerminalRoutes(app, office); // M4: /ws/terminal/:agentId (pty popup)
+  const terminals = registerTerminalRoutes(app, office); // M4: /ws/terminal/:agentId (pty popup)
+  registerNativeTerminalRoutes(app, office, terminals, store); // hand a session to the machine's real terminal
+  registerFsRoutes(app); // folder picker for the hire form
   registerChatRoutes(app, office); // M4: /ws/chat/:agentId (chat-role agents)
+
+  /** The hire form reopens its folder browser wherever you last hired from. */
+  app.get("/api/settings", async () => ({ lastHireDir: store.getSetting(SETTINGS.lastHireDir) }));
 
   /** Claude Code hooks (SessionStart/PreToolUse/.../SessionEnd) POST here, one per event; see hooks.ts for the mapping. */
   app.post("/api/hook", async (req) => {
@@ -92,7 +99,7 @@ export async function createServer(opts: ServerOptions = {}) {
         return send({ type: "error", message: "invalid json" });
       }
       if (!parsed.success) return send({ type: "error", message: parsed.error.issues.map((i) => i.message).join("; ") });
-      const err = handle(office, parsed.data);
+      const err = handle(office, parsed.data, store);
       if (err) send({ type: "error", message: err });
     });
     socket.on("close", unsub);
@@ -101,12 +108,13 @@ export async function createServer(opts: ServerOptions = {}) {
   return { app, office };
 }
 
-function handle(office: Office, m: ClientMessage): string | undefined {
+function handle(office: Office, m: ClientMessage, store: Store): string | undefined {
   switch (m.type) {
     case "hello":
       return;
     case "agent.hire":
       office.hire(m.payload);
+      store.setSetting(SETTINGS.lastHireDir, m.payload.cwd);
       return;
     case "agent.fire":
       office.fire(m.agentId);

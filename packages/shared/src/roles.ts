@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL } from "./models.js";
 import type { RoleId, UiMode } from "./schemas.js";
 
 export interface RolePreset {
@@ -19,7 +20,7 @@ export const ROLE_PRESETS: Record<RoleId, RolePreset> = {
     label: "Coder",
     blurb: "Full tools, edits accepted inside the project.",
     uiMode: "terminal",
-    model: "sonnet",
+    model: DEFAULT_MODEL,
     allowedTools: ["Read", "Edit", "Write", "Bash", "Grep", "Glob", "Agent"],
     permissionMode: "acceptEdits",
     systemPrompt: "",
@@ -30,7 +31,7 @@ export const ROLE_PRESETS: Record<RoleId, RolePreset> = {
     label: "Reviewer",
     blurb: "Read-only. Reviews and reports, never edits.",
     uiMode: "terminal",
-    model: "sonnet",
+    model: DEFAULT_MODEL,
     allowedTools: ["Read", "Grep", "Glob", "Bash(git diff:*)", "Bash(git log:*)"],
     permissionMode: "plan",
     systemPrompt: "You are a code reviewer. Report findings; do not modify files.",
@@ -41,7 +42,7 @@ export const ROLE_PRESETS: Record<RoleId, RolePreset> = {
     label: "Chat",
     blurb: "No tools. Plain conversation.",
     uiMode: "chat",
-    model: "sonnet",
+    model: DEFAULT_MODEL,
     allowedTools: [],
     permissionMode: "default",
     systemPrompt: "You are a helpful conversational assistant.",
@@ -52,7 +53,7 @@ export const ROLE_PRESETS: Record<RoleId, RolePreset> = {
     label: "Assistant",
     blurb: "Files and web in a chosen folder. Chat interface.",
     uiMode: "chat",
-    model: "sonnet",
+    model: DEFAULT_MODEL,
     allowedTools: ["Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch"],
     permissionMode: "acceptEdits",
     systemPrompt: "You help with documents and everyday tasks in the working folder.",
@@ -63,7 +64,7 @@ export const ROLE_PRESETS: Record<RoleId, RolePreset> = {
     label: "Custom",
     blurb: "Start from scratch.",
     uiMode: "terminal",
-    model: "sonnet",
+    model: DEFAULT_MODEL,
     allowedTools: [],
     permissionMode: "default",
     systemPrompt: "",

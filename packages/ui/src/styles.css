@@ -81,6 +81,43 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
 .terminal-panel-bar button, .chat-panel-bar button, .float-titlebar button { padding: 2px 8px; font-size: 11px; }
 .xterm-host { height: 260px; padding: 4px 6px; }
 .xterm-host--float { height: 100%; }
+.xterm-host--fill { flex: 1; min-height: 0; padding: 4px 6px; }
+
+.terminal-actions { display: flex; align-items: center; gap: 4px; }
+.terminal-actions .split { position: relative; display: flex; gap: 0; }
+.terminal-actions .split button { border-radius: 0; }
+.terminal-actions .split button:first-child { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+.terminal-actions .split button.caret { border-top-right-radius: 4px; border-bottom-right-radius: 4px; border-left: none; padding: 2px 5px; }
+.term-menu {
+  position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 60; min-width: 160px;
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5); display: flex; flex-direction: column; padding: 4px;
+}
+.term-menu button { text-align: left; border: none; background: none; padding: 5px 8px; text-transform: none; letter-spacing: 0; }
+.term-menu button:hover { background: var(--panel-2); }
+.terminal-handoff { padding: 14px; color: var(--muted); font-size: 12px; }
+.terminal-handoff p { margin: 0 0 8px; }
+.terminal-handoff b { color: var(--text); }
+
+.standalone-terminal { position: fixed; inset: 0; display: flex; flex-direction: column; background: #0d0f14; }
+.standalone-bar {
+  padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--muted);
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+}
+
+.folder-field { display: flex; gap: 6px; }
+.folder-field input { flex: 1; }
+.field-error { color: var(--bad); font-size: 12px; margin-top: 4px; }
+.folder-picker { min-width: 420px; }
+.folder-path { font-size: 12px; color: var(--muted); word-break: break-all; margin-bottom: 8px; }
+.folder-list {
+  max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); display: flex; flex-direction: column; padding: 4px;
+}
+.folder-list button { text-align: left; border: none; background: none; padding: 5px 8px; text-transform: none; letter-spacing: 0; }
+.folder-list button:hover { background: var(--panel-2); }
+.folder-up { color: var(--muted); }
+.folder-empty { padding: 10px 8px; color: var(--muted); font-size: 12px; }
 
 .chat-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); display: inline-block; }
 .chat-dot.ok { background: var(--ok); }

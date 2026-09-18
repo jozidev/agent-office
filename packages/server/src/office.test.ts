@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Agent, RunnerEvent, Ticket, ServerMessage } from "@agent-office/shared";
+import { DEFAULT_MODEL, ROLE_PRESETS } from "@agent-office/shared";
 import { Office } from "./office.js";
 import type { RunningSession, SessionRunner } from "./runner.js";
 
@@ -186,5 +187,20 @@ describe("Office.ingestExternal (hook-driven, no ticket)", () => {
     runner.emit({ kind: "context", pct: 0.11 }); // the ticket's own context readout
     office.ingestStatusline(a.id, { context_window: { used_percentage: 90 } });
     expect(office.snapshot().states[0]!.metrics.contextPct).toBeCloseTo(0.11); // unrelated terminal session must not override it
+  });
+});
+
+describe("hire model", () => {
+  it("uses the model the hire form picked", () => {
+    const office = new Office(new ManualRunner());
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/tmp", model: "claude-haiku-4-5" });
+    expect(agent.model).toBe("claude-haiku-4-5");
+  });
+
+  it("falls back to the role preset when no model is given", () => {
+    const office = new Office(new ManualRunner());
+    const agent = office.hire({ name: "Rex", role: "reviewer", cwd: "/tmp" });
+    expect(agent.model).toBe(ROLE_PRESETS.reviewer.model);
+    expect(agent.model).toBe(DEFAULT_MODEL);
   });
 });
