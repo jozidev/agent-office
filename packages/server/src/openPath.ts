@@ -23,7 +23,15 @@ export function openArgs(path: string, mode: OpenMode, platform: NodeJS.Platform
     case "darwin":
       return ["open", mode === "reveal" ? ["-R", path] : [path]];
     case "win32":
-      return mode === "reveal" ? ["explorer.exe", [`/select,${path}`]] : ["cmd.exe", ["/c", "start", "", path]];
+      // explorer.exe both opens a file with its default handler and selects it
+      // with /select, each as a single argv element with no shell involved.
+      //
+      // Never `cmd.exe /c start`: cmd re-parses its own command line and
+      // expands &, |, ^, <, > and %VAR% even out of arguments Node quoted. All
+      // of those are legal in Windows filenames, and agents create files — so
+      // an agent could write `notes&calc.md` and clicking it in the log would
+      // run a command.
+      return ["explorer.exe", mode === "reveal" ? [`/select,${path}`] : [path]];
     case "linux":
       // No reveal equivalent that is present everywhere; open the folder.
       return ["xdg-open", [mode === "reveal" ? dirname(path) : path]];

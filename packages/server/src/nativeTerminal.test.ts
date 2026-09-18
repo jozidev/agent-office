@@ -179,3 +179,32 @@ describe("native handoff route", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+/**
+ * Launching a terminal on Windows needs `start`, a cmd builtin, and `cmd /c`
+ * re-expands &, |, ^, <, > and %VAR% out of arguments Node already quoted.
+ * The script name is ours, but the temp folder it sits in is not.
+ */
+describe("writeLaunchScript on Windows", () => {
+  it("refuses a temp folder cmd.exe would reinterpret", () => {
+    const original = process.env["TMPDIR"];
+    process.env["TMPDIR"] = "/tmp/evil&calc/";
+    try {
+      expect(() => writeLaunchScript("cd /tmp", "a1", "win32")).toThrow(/reinterpret/);
+    } finally {
+      if (original === undefined) delete process.env["TMPDIR"];
+      else process.env["TMPDIR"] = original;
+    }
+  });
+
+  it("leaves other platforms alone — /bin/sh does not re-parse an argv element", () => {
+    const original = process.env["TMPDIR"];
+    process.env["TMPDIR"] = "/tmp/odd&name/";
+    try {
+      expect(() => writeLaunchScript("cd /tmp", "a1", "darwin")).not.toThrow();
+    } finally {
+      if (original === undefined) delete process.env["TMPDIR"];
+      else process.env["TMPDIR"] = original;
+    }
+  });
+});

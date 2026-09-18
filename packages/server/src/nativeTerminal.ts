@@ -197,6 +197,11 @@ export function buildCommand(agent: Agent, sessionId: string | null): string {
 export function writeLaunchScript(command: string, agentId: string, platform: NodeJS.Platform = process.platform): string {
   const win = platform === "win32";
   const path = join(tmpdir(), `agent-office-${agentId}-${Date.now()}.${win ? "cmd" : "command"}`);
+  // Opening a new console window needs `start`, which is a cmd builtin, and
+  // `cmd /c` expands these back out of arguments Node already quoted. Our half
+  // of this path is a nanoid and a timestamp; %TMP% is not ours, so check it
+  // rather than assume it is tame.
+  if (win && /[&|^<>"%!]/.test(path)) throw new Error(`temp folder contains characters cmd.exe would reinterpret: ${path}`);
   writeFileSync(path, win ? `@echo off\r\n${command}\r\n` : `#!/bin/sh\n${command}\n`, { mode: 0o700 });
   if (!win) chmodSync(path, 0o700);
   return path;

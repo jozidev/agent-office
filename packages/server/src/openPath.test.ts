@@ -31,6 +31,30 @@ describe("openArgs", () => {
     expect(openArgs("C:\\x\\y.md", "reveal", "win32")).toEqual(["explorer.exe", ["/select,C:\\x\\y.md"]]);
   });
 
+  /**
+   * `cmd.exe /c` re-parses its command line and expands &, |, ^, <, > and
+   * %VAR% back out of arguments Node already quoted. Those are all legal in
+   * Windows filenames and agents create files, so routing a path through cmd
+   * turns "click the file your agent wrote" into command execution.
+   */
+  it("never hands a Windows path to a shell", () => {
+    for (const mode of ["open", "reveal"] as const) {
+      const [cmd, args] = openArgs("C:\\x\\notes&calc.exe.md", mode, "win32")!;
+      expect(cmd).toBe("explorer.exe");
+      expect(args).toHaveLength(1);
+      expect(args.join(" ")).toContain("notes&calc.exe.md"); // passed through intact, not interpreted
+    }
+  });
+
+  it("does not use a shell on any platform", () => {
+    const shells = ["cmd.exe", "cmd", "sh", "bash", "zsh", "powershell.exe"];
+    for (const platform of ["darwin", "win32", "linux"] as const) {
+      for (const mode of ["open", "reveal"] as const) {
+        expect(shells).not.toContain(openArgs("/x/y.md", mode, platform)![0]);
+      }
+    }
+  });
+
   it("falls back to opening the folder on linux, which has no portable reveal", () => {
     expect(openArgs("/x/y.md", "reveal", "linux")).toEqual(["xdg-open", ["/x"]]);
   });
