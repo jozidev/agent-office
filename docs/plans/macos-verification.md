@@ -241,3 +241,7 @@ both want machine-level preferences; this is where they go.
 **Still true for the next session:** milestone 6 (supply closet) and 7 (usage
 gauges) are next, #2 and #3 are still open, and the stranded-hooks loose end is
 still unfiled.
+
+**Continued in [agent-state-and-files.md](agent-state-and-files.md)** — the
+"needs you" state, editable agent config, and reading what agents write. That
+log carries the current open decision; start there.
