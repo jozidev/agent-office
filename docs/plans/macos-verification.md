@@ -160,3 +160,45 @@ and only removed when you fire the agent. Killing the server leaves them behind,
 pointing at a port with nothing on it. They fail silently (`curl -s ... >/dev/null`)
 so nothing breaks, and restored agents get theirs rewritten on boot, but an agent
 whose database entry is gone leaves its hooks stranded in that folder.
+
+## Handoff
+
+State at the end of the macOS verification session (2026-09-18).
+
+**Repo**: clean on `main`, 5 commits ahead of `7d11268`, nothing pushed yet.
+
+```
+e9f0e92 feat: persist agents and tickets in SQLite, add a release dry run
+ff880a1 fix: surface server errors from the CLI, refresh stale setup copy
+5b6daeb fix: stop double-logging tool calls, and render an empty office
+9c74d8e fix: make node-pty's spawn-helper executable so terminals can spawn
+bca996c fix: survive failed claude spawns, and stop demo seed from running real sessions
+```
+
+**Checks**: `pnpm -r build` first (apps/cli typechecks against packages/server's
+built `.d.ts`), then `pnpm -r typecheck`, `pnpm test` (82 tests), and
+`pnpm release:dry` for the packaging path. All green as of the last commit.
+
+**Environment gotchas on this machine**: `pnpm` had to be installed globally
+(`npm i -g pnpm@10.28.0`); Node is v25.6.0; `claude` is 2.1.276. Test scratch
+project lives at `~/Development/agent-office-scratch` (holds `hello.txt` and
+`goodbye.txt` written by real agents; its `.claude/settings.local.json` is an
+empty `{}` left behind by uninstallHooks).
+
+**Milestones 1-5 done.** Next up is 6 (supply closet: MCP servers, skills,
+plugins, subagent definitions) and 7 (usage collector and office gauges).
+
+**Open before starting 6**, all filed with full context:
+
+- [#1](https://github.com/jozidev/agent-office/issues/1) hiring into a folder that doesn't exist fails silently
+- [#2](https://github.com/jozidev/agent-office/issues/2) tooltip reads "0k/0k" tokens while cost reads $0.06
+- [#3](https://github.com/jozidev/agent-office/issues/3) `setup.ts` has no tests and needs a seam first
+
+**Unfiled loose end**: hooks are written into an agent's project folder and only
+removed when the agent is fired, so an agent whose database row disappears
+leaves them stranded (they fail silently). Worth deciding on during milestone 6,
+since that milestone owns config management.
+
+**Note for the next session**: the user had notes to pass on that did not come
+through the terminal (the message arrived as "some notes:" with nothing after
+it, twice). Ask for them before picking up new work.
