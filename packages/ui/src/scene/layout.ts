@@ -11,6 +11,8 @@ export const ROW_GAP_X = 3.1; // between rows
 export const KITCHEN_DEPTH = 2.6; // strip along -z (back wall)
 export const SIDE_DEPTH = 1.2; // breathing room in front of the first row
 export const PAD = 1.3;
+/** the back wall has to fit kitchen + whiteboard + clock + window + server door */
+export const MIN_W = 13.0;
 
 export function rowCount(total: number): number {
   return Math.max(2, Math.ceil(Math.max(total, 1) / DESKS_PER_ROW));
@@ -18,7 +20,7 @@ export function rowCount(total: number): number {
 
 export function roomSize(total: number): { w: number; d: number } {
   return {
-    w: rowCount(total) * ROW_GAP_X + SIDE_DEPTH + PAD * 2,
+    w: Math.max(MIN_W, rowCount(total) * ROW_GAP_X + SIDE_DEPTH + PAD * 2),
     d: DESKS_PER_ROW * DESK_GAP_Z + KITCHEN_DEPTH + PAD * 2 + 0.8,
   };
 }

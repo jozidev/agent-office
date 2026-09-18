@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { Html } from "@react-three/drei";
 import { Furniture } from "./Furniture";
 import { rowEnds, roomSize, KITCHEN_DEPTH, PAD } from "./layout";
 
@@ -84,51 +83,70 @@ export function Room({ agentCount }: { agentCount: number }) {
         <meshStandardMaterial color="#232733" />
       </mesh>
 
-      {/* windows on the back walls */}
-      {[-hw + w * 0.62, -hw + w * 0.78].map((x, i) => (
-        <Window key={`b${i}`} position={[x, 1.7, -hd + T / 2 + 0.01]} rotation={[0, 0, 0]} />
-      ))}
-      {[-hd + d * 0.45, -hd + d * 0.62].map((z, i) => (
-        <Window key={`l${i}`} position={[-hw + T / 2 + 0.01, 1.7, z]} rotation={[0, Math.PI / 2, 0]} />
-      ))}
+      {/* Back wall, laid out left to right as slots so nothing overlaps:
+          kitchen (fridge + 3 cabinets + bin + cooler, ~5.6) | whiteboard 1.9 | clock 0.6 | window 1.3 | window 1.3 | posters 1.4 | server door 1.0 */}
+      {(() => {
+        const zWall = -hd + T / 2 + 0.02;
+        const gap = 0.45;
+        let x = -hw + 0.3;
+        const slot = (width: number) => {
+          const cx = x + width / 2;
+          x += width + gap;
+          return cx;
+        };
+        const kitchenX = slot(5.6);
+        const boardX = slot(1.9);
+        const clockX = slot(0.6);
+        const win1 = slot(1.3);
+        const doorX = slot(1.0);
+        const used = x - gap - (-hw + 0.3);
+        // if the wall is wider than the content, spread the extra space to the right of the kitchen
+        const extra = Math.max(0, w - 0.6 - used);
+        const shift = (v: number) => v + (v > kitchenX ? extra : 0);
+        return (
+          <>
+            <Whiteboard position={[shift(boardX), 1.6, zWall]} />
+            <Clock position={[shift(clockX), 2.0, zWall]} />
+            <Window position={[shift(win1), 1.7, zWall]} rotation={[0, 0, 0]} />
+            <ServerDoor position={[shift(doorX), 0, zWall]} />
+            <Suspense fallback={null}>
+              <group position={[kitchenX - 2.8, 0, -hd + 0.65]} scale={0.8}>
+                <Furniture name="kitchenFridge" position={[0.5, 0, 0.1]} rotation={[0, Math.PI / 2, 0]} />
+                <Furniture name="kitchenCabinetDrawer" position={[1.65, 0, 0]} />
+                <Furniture name="kitchenSink" position={[2.7, 0, 0]} />
+                <Furniture name="kitchenCabinet" position={[3.75, 0, 0]} />
+                <Furniture name="kitchenMicrowave" position={[3.75, 0.95, 0]} scale={0.9} />
+                <Furniture name="kitchenCoffeeMachine" position={[1.65, 0.95, 0]} />
+                <Furniture name="trashcan" position={[4.75, 0, 0]} />
+                {/* water cooler */}
+                <group position={[5.6, 0, 0]}>
+                  <mesh position={[0, 0.5, 0]}>
+                    <boxGeometry args={[0.36, 1.0, 0.36]} />
+                    <meshStandardMaterial color="#e6e8ec" />
+                  </mesh>
+                  <mesh position={[0, 1.22, 0]}>
+                    <cylinderGeometry args={[0.15, 0.17, 0.45, 12]} />
+                    <meshStandardMaterial color="#7fc4e8" transparent opacity={0.8} />
+                  </mesh>
+                </group>
+              </group>
+            </Suspense>
+          </>
+        );
+      })()}
 
-      {/* whiteboard, clock, posters and server room on the back wall */}
-      <Whiteboard position={[-hw + w * 0.42, 1.6, -hd + T / 2 + 0.02]} />
-      <Clock position={[-hw + w * 0.52, 2.05, -hd + T / 2 + 0.02]} />
-      <Poster position={[-hw + w * 0.9, 1.75, -hd + T / 2 + 0.02]} color="#b23a3a" accent="#f2c14e" />
-      <Poster position={[-hw + w * 0.96, 1.75, -hd + T / 2 + 0.02]} color="#2a5f8f" accent="#e6e8ec" />
-      <ServerDoor position={[hw - 1.3, 0, -hd + T / 2 + 0.02]} />
+      {/* left wall: window, posters above the bookcase, window */}
+      <Window position={[-hw + T / 2 + 0.01, 1.7, -hd + d * 0.42]} rotation={[0, Math.PI / 2, 0]} />
+      <Poster position={[-hw + T / 2 + 0.02, 1.9, -hd + d * 0.57]} rotation={[0, Math.PI / 2, 0]} color="#b23a3a" accent="#f2c14e" />
+      <Poster position={[-hw + T / 2 + 0.02, 1.9, -hd + d * 0.64]} rotation={[0, Math.PI / 2, 0]} color="#2a5f8f" accent="#e6e8ec" />
+      <Window position={[-hw + T / 2 + 0.01, 1.7, -hd + d * 0.82]} rotation={[0, Math.PI / 2, 0]} />
 
       {/* supply closet and bookcase on the left wall */}
-      <Closet position={[-hw + T / 2 + 0.02, 0, -hd + d * 0.3]} />
+      <Closet position={[-hw + T / 2 + 0.02, 0, -hd + d * 0.25]} />
 
       <Suspense fallback={null}>
-        {/* kitchen strip along the back wall (left part) */}
-        <group position={[-hw + 0.9, 0, -hd + 0.65]} scale={0.8}>
-          <Furniture name="kitchenFridge" position={[0, 0, 0.1]} rotation={[0, Math.PI / 2, 0]} />
-          <Furniture name="kitchenCabinetDrawer" position={[1.15, 0, 0]} />
-          <Furniture name="kitchenSink" position={[2.2, 0, 0]} />
-          <Furniture name="kitchenCabinet" position={[3.25, 0, 0]} />
-          <Furniture name="kitchenMicrowave" position={[3.25, 0.95, 0]} scale={0.9} />
-          <Furniture name="kitchenCoffeeMachine" position={[1.15, 0.95, 0]} />
-          <Furniture name="kitchenCabinetUpper" position={[2.2, 1.7, -0.3]} />
-          <Furniture name="trashcan" position={[4.2, 0, 0]} />
-          <Label text="kitchen" position={[2.2, 2.4, 0]} />
-        </group>
-        {/* water cooler by the kitchen */}
-        <group position={[-hw + 4.9, 0, -hd + 0.6]} scale={0.85}>
-          <mesh position={[0, 0.5, 0]}>
-            <boxGeometry args={[0.36, 1.0, 0.36]} />
-            <meshStandardMaterial color="#e6e8ec" />
-          </mesh>
-          <mesh position={[0, 1.22, 0]}>
-            <cylinderGeometry args={[0.15, 0.17, 0.45, 12]} />
-            <meshStandardMaterial color="#7fc4e8" transparent opacity={0.8} />
-          </mesh>
-        </group>
-
         {/* left wall: bookcase and a plant */}
-        <Furniture name="bookcaseClosedWide" position={[-hw + 0.45, 0, -hd + d * 0.55]} rotation={[0, Math.PI / 2, 0]} />
+        <Furniture name="bookcaseClosedWide" position={[-hw + 0.45, 0, -hd + d * 0.6]} rotation={[0, Math.PI / 2, 0]} />
         <Furniture name="pottedPlant" position={[-hw + 0.7, 0, -hd + d * 0.72]} />
 
 
@@ -186,7 +204,6 @@ function Whiteboard({ position }: { position: [number, number, number] }) {
           <meshStandardMaterial color={["#4aa3df", "#e05a5a", "#3a3f4b"][i]} />
         </mesh>
       ))}
-      <Label text="whiteboard" position={[0, 0.75, 0]} />
     </group>
   );
 }
@@ -206,14 +223,13 @@ function Clock({ position }: { position: [number, number, number] }) {
         <boxGeometry args={[0.03, 0.16, 0.01]} />
         <meshStandardMaterial color="#222" />
       </mesh>
-      <Label text="clock" position={[0, 0.5, 0]} />
     </group>
   );
 }
 
-function Poster({ position, color, accent }: { position: [number, number, number]; color: string; accent: string }) {
+function Poster({ position, rotation = [0, 0, 0], color, accent }: { position: [number, number, number]; rotation?: [number, number, number]; color: string; accent: string }) {
   return (
-    <group position={position}>
+    <group position={position} rotation={rotation}>
       <mesh>
         <boxGeometry args={[0.6, 0.85, 0.03]} />
         <meshStandardMaterial color={color} />
@@ -241,7 +257,6 @@ function ServerDoor({ position }: { position: [number, number, number] }) {
         <boxGeometry args={[0.5, 0.35, 0.02]} />
         <meshStandardMaterial color="#1c2230" emissive="#2b6cb0" emissiveIntensity={0.5} />
       </mesh>
-      <Label text="server room" position={[0, 2.25, 0]} />
     </group>
   );
 }
@@ -257,7 +272,6 @@ function Closet({ position }: { position: [number, number, number] }) {
         <sphereGeometry args={[0.05, 8, 8]} />
         <meshStandardMaterial color="#d9c27a" />
       </mesh>
-      <Label text="supply closet" position={[0, 2.25, 0]} />
     </group>
   );
 }
@@ -279,14 +293,6 @@ function Grid({ w, d }: { w: number; d: number }) {
         </line>
       ))}
     </group>
-  );
-}
-
-function Label({ text, position }: { text: string; position: [number, number, number] }) {
-  return (
-    <Html position={position} center zIndexRange={[2, 0]} style={{ pointerEvents: "none" }}>
-      <div style={{ color: "#9aa3ad", fontSize: 10, fontFamily: "ui-monospace, monospace", whiteSpace: "nowrap", opacity: 0.8 }}>{text}</div>
-    </Html>
   );
 }
 
