@@ -80,6 +80,7 @@ export class Office {
         sessionId: sessionIds.get(agent.id) ?? null,
         ticketId: null,
         question: null,
+      answerIn: null,
       metrics: emptyMetrics(),
         subagents: [],
         log: ["back at their desk"],
@@ -149,6 +150,7 @@ export class Office {
       sessionId: null,
       ticketId: null,
       question: null,
+      answerIn: null,
       metrics: emptyMetrics(),
       subagents: [],
       log: [`hired as ${preset.label}`],
@@ -273,6 +275,7 @@ export class Office {
     }
     state.status = "idle";
     state.question = null;
+    state.answerIn = null;
     state.ticketId = null;
     state.sessionId = null;
     state.subagents = [];
@@ -319,12 +322,14 @@ export class Office {
     // --resume` against the same conversation.
     const live = this.sessions.get(agentId);
     if (live?.isAlive()) live.respond(text);
+    else if (state.answerIn === "terminal") return;
     else if (state.status === "waiting" && state.sessionId) this.resumeSession(agentId, text);
     else return;
 
     if (state.status === "waiting") {
       state.status = "thinking";
       state.question = null;
+      state.answerIn = null;
       this.pushLog(state, `you: ${text}`);
       if (state.ticketId) this.updateTicket(state.ticketId, { status: "in_progress" });
       this.broadcast({ type: "state.update", state });
@@ -370,6 +375,7 @@ export class Office {
       case "waiting":
         state.status = "waiting";
         state.question = e.prompt;
+        state.answerIn = "panel";
         this.pushLog(state, `asks: ${truncateLog(e.prompt)}`);
         if (ticketId) this.updateTicket(ticketId, { status: "waiting" });
         break;
@@ -437,7 +443,10 @@ export class Office {
         }, 6000);
         break;
     }
-    if (state.status !== "waiting") state.question = null;
+    if (state.status !== "waiting") {
+      state.question = null;
+      state.answerIn = null;
+    }
     this.broadcast({ type: "state.update", state });
   }
 
@@ -482,6 +491,7 @@ export class Office {
       case "waiting":
         state.status = "waiting";
         state.question = e.prompt;
+        state.answerIn = "terminal";
         this.pushLog(state, `asks: ${truncateLog(e.prompt)}`);
         break;
       case "subagent_start": {

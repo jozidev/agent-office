@@ -31,7 +31,7 @@ export function AgentPanel() {
         <button onClick={() => setSelected(null)}>×</button>
       </header>
       <div className="body">
-        {waiting && <AskCard agentName={agent.name} question={question} onSend={answer} />}
+        {waiting && <AskCard agentName={agent.name} question={question} answerIn={state.answerIn} onSend={answer} />}
         <details className="kv-wrap" open={!waiting}>
           <summary>details</summary>
           <div className="kv">

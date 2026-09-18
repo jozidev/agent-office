@@ -99,6 +99,13 @@ export const AgentState = z.object({
   ticketId: z.string().nullable(),
   /** What the agent is waiting to hear, in full. Set with `waiting`, cleared when it moves on. */
   question: z.string().nullable().default(null),
+  /**
+   * Where that question can actually be answered. A ticket run that stopped to
+   * ask is continued from the panel; an interactive terminal session owns its
+   * own prompt, and answering it anywhere else would fork a second session
+   * against the same conversation.
+   */
+  answerIn: z.enum(["panel", "terminal"]).nullable().default(null),
   metrics: SessionMetrics,
   subagents: z.array(Subagent),
   /** last N event lines for the panel */

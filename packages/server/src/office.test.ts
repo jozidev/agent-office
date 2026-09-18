@@ -297,3 +297,56 @@ describe("hook events during an office-run session", () => {
     expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.status).toBe("waiting");
   });
 });
+
+/**
+ * Two different things can be waiting on you, and only one of them is
+ * answerable from the panel. An interactive terminal session shows Claude
+ * Code's own numbered prompt and only that pty can hear the answer; replying
+ * from the panel would start a second session against the same conversation.
+ */
+describe("where a question can be answered", () => {
+  it("marks a ticket run's own ask as answerable from the panel", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("do a thing", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "sess-1" });
+    runner.emit({ kind: "waiting", prompt: "Postgres or SQLite?" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.answerIn).toBe("panel");
+  });
+
+  it("marks a hook-driven ask as belonging to the terminal", () => {
+    const { office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    office.ingestExternal(agent.id, { kind: "waiting", prompt: "Claude needs your permission" });
+    const state = office.snapshot().states.find((s) => s.agentId === agent.id);
+    expect(state?.answerIn).toBe("terminal");
+    expect(state?.status).toBe("waiting");
+  });
+
+  it("refuses to answer a terminal's prompt, rather than forking a rival session", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    office.ingestExternal(agent.id, { kind: "waiting", prompt: "Claude needs your permission" });
+    // A terminal session has a session id, which is exactly what would have
+    // been resumed.
+    office.ingestExternal(agent.id, { kind: "started", sessionId: "term-1" });
+
+    office.respond(agent.id, "1");
+    expect(runner.resumed).toEqual([]);
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.question).toBe("Claude needs your permission");
+  });
+
+  it("clears both when the agent moves on", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("do a thing", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "sess-1" });
+    runner.emit({ kind: "waiting", prompt: "well?" });
+    runner.emit({ kind: "tool_use", name: "Read", summary: "/x" });
+    const state = office.snapshot().states.find((s) => s.agentId === agent.id);
+    expect(state?.question).toBeNull();
+    expect(state?.answerIn).toBeNull();
+  });
+});

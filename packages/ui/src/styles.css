@@ -118,6 +118,9 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
 .ask-reply textarea { min-height: 52px; max-height: 160px; font-size: 12px; }
 .ask-actions { display: flex; gap: 6px; }
 .ask-actions .primary { margin-left: auto; }
+/* A prompt the terminal owns: same alert, but nothing here pretends to answer it. */
+.ask--terminal .ask-reply { padding-top: 0; border-top: none; }
+.ask-hint { color: var(--muted); font-size: 12px; }
 
 /* A path is a link, but inside a log line it must not look like a button. */
 .file-link {
