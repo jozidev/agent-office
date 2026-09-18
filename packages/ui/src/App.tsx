@@ -1,6 +1,6 @@
 import { useOffice } from "./store";
 import { OfficeScene } from "./scene/OfficeScene";
-import { deskScreenPositions } from "./scene/Desk";
+import { deskScreenPositions } from "./scene/Seat";
 import { Hud } from "./ui/Hud";
 import { Tooltip } from "./ui/Tooltip";
 import { AgentPanel } from "./ui/AgentPanel";
