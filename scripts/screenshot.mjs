@@ -8,6 +8,7 @@ page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 await page.goto("http://127.0.0.1:4177/", { waitUntil: "networkidle" });
 await page.waitForTimeout(2500);
+if (await page.$(".modal.setup")) { await page.click(".modal.setup header button:last-child"); await page.waitForTimeout(300); }
 await page.screenshot({ path: `${out}/1-office.png` });
 
 // hover the first busy desk: find via store

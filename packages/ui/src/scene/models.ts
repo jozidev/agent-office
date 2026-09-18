@@ -54,5 +54,5 @@ export function useModelClone(url: string): Object3D {
 
 export function preloadModels() {
   for (const id of CHARACTER_IDS) useGLTF.preload(characterUrl(id));
-  for (const f of ["desk", "chairDesk", "computerScreen", "computerKeyboard", "kitchenCoffeeMachine", "pottedPlant", "plantSmall1", "bookcaseOpen", "lampSquareFloor", "cabinetTelevision"]) useGLTF.preload(furnitureUrl(f));
+  for (const f of ["desk", "chairDesk", "computerScreen", "computerKeyboard", "kitchenCoffeeMachine", "pottedPlant", "plantSmall1", "bookcaseOpen", "lampSquareFloor", "cabinetTelevision", "plantSmall2", "books", "rugRectangle", "tableCoffee", "loungeChair"]) useGLTF.preload(furnitureUrl(f));
 }

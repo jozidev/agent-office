@@ -3,7 +3,7 @@ import { OrthographicCamera } from "@react-three/drei";
 import { useOffice } from "../store";
 import { Desk } from "./Desk";
 import { Room } from "./Room";
-import { deskPosition } from "./layout";
+import { deskSlot } from "./layout";
 import { preloadModels } from "./models";
 
 preloadModels();
@@ -13,7 +13,7 @@ export function OfficeScene() {
   const states = useOffice((s) => s.states);
   const setSelected = useOffice((s) => s.setSelected);
   const list = Object.values(agents);
-  const zoom = Math.max(36, 84 - list.length * 3);
+  const zoom = Math.max(36, 90 - list.length * 2.5);
 
   return (
     <Canvas shadows dpr={[1, 2]} onPointerMissed={() => setSelected(null)} className="canvas">
@@ -26,7 +26,7 @@ export function OfficeScene() {
       {list.map((a) => {
         const st = states[a.id];
         if (!st) return null;
-        return <Desk key={a.id} agent={a} state={st} position={deskPosition(a.desk, list.length)} />;
+        return <Desk key={a.id} agent={a} state={st} position={deskSlot(a.desk, list.length).position} />;
       })}
     </Canvas>
   );
