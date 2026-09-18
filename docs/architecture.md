@@ -38,7 +38,7 @@ Rule: anything that touches the filesystem, processes, or the CLI lives in `serv
 
 ## Server
 
-- **Agent registry**: record per agent (id, name, role preset, colour, model, working directory, system prompt, allowed tools, permission mode, desk). In-memory now; SQLite under `~/.agent-office/` later.
+- **Agent registry**: record per agent (id, name, role preset, colour, model, working directory, system prompt, allowed tools, permission mode, desk). Held in memory and written through to SQLite at `~/.agent-office/office.db` (`store.ts`), so agents and the board survive a restart.
 - **Role presets**: Coder (full tools, acceptEdits, terminal UI), Reviewer (read-only, plan mode), Chat (no tools, chat UI), Assistant (file and web tools, chat UI), Custom.
 - **Session runner**: per ticket, spawns `claude -p "<ticket>" --output-format stream-json --verbose` in the agent's cwd with the agent's flags. Parses the JSON stream for messages, tool use, usage, cost, and result. Session id kept for `--resume`. `CliRunner` (real) and `MockRunner` (demo/dev) both implement `SessionRunner`; `pickRunner()` chooses between them (env override, else whether `claude` is on PATH).
 - **Terminal manager**: spawns `claude --resume <sessionId>` in a node-pty; streams to xterm.js. Pty stays alive when the popup closes; killed on agent delete.
@@ -66,11 +66,37 @@ Rule: anything that touches the filesystem, processes, or the CLI lives in `serv
 2. Board with drag-to-assign; mocked sessions. Done.
 3. Real sessions via headless CLI; hooks and statusline forwarder. Done.
 4. Pty terminal popup and chat-box UI. Done.
-5. `npx` first-run setup (checks `claude` is installed and logged in).
+5. `npx` first-run setup (checks `claude` is installed and logged in); SQLite persistence. Done.
 6. Inventory: supply closet UI.
 7. Usage collector, office gauges, stats view.
 8. Optional SDK / API-key mode.
 9. Tauri shell.
+
+## Milestone 5 notes
+
+- **What persists**: agents (including desk, so seats are stable) and tickets.
+  Not live state — status, metrics, subagents and the event log all describe a
+  running `claude` process, and that process does not survive the server. A
+  restored agent is idle with a one-line log, and a ticket that was `assigned`,
+  `in_progress` or `waiting` returns to `backlog` unassigned (`statusAfterRestart`).
+  The alternative — restoring a ticket as `in_progress` with nothing running —
+  is a state the UI cannot act on and the user cannot clear.
+- The agent's last session id *is* kept, so a restored agent's terminal still
+  opens `claude --resume <id>` on the conversation it was having.
+- Hooks are reinstalled for restored agents on every boot, because they embed
+  this run's port and the port can change between runs.
+- `SqliteStore` is behind a `Store` interface with a `MemoryStore` beside it, the
+  same shape as `SessionRunner`. Tests and `AGENT_OFFICE_PERSIST=0` use the latter.
+- **Packaging**: `pnpm release:dry` packs `apps/cli`, installs the tarball with
+  plain npm into a temp directory and runs the installed binary, because three
+  packaging bugs are invisible from inside the workspace: `workspace:*` deps that
+  npm cannot resolve (the bundled workspace packages are devDependencies now),
+  native addons that must stay external to the tsup bundle (`better-sqlite3`
+  drags in `bindings`, whose `__filename` cannot coexist with top-level await in
+  an ESM bundle), and node-pty's `spawn-helper` losing its executable bit.
+- That last one is worth knowing about: npm *hoists* node-pty to a sibling of the
+  installed package, so the postinstall fixer has to search parent `node_modules`
+  as well as its own, and resolve the copy Node would actually load.
 
 ## Milestone 3 notes
 

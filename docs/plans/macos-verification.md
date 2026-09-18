@@ -135,3 +135,28 @@ Also fixed in passing: the CLI ran the server with `logger: false`, which is
 what hid bug 4 behind a blank panel. It now logs at `warn` (set
 `AGENT_OFFICE_DEBUG=1` for full request logging). Stale milestone copy on the
 Setup page was corrected.
+
+## Milestone 5
+
+Agents and tickets now persist to SQLite at `~/.agent-office/office.db`; see
+"Milestone 5 notes" in `docs/architecture.md` for what is and isn't stored and
+why. Verified by hiring an agent, creating a ticket, killing the server and
+starting it again: agent back at desk 0, ticket back on the board.
+
+`pnpm release:dry` packs the CLI, installs the tarball with plain npm, runs the
+installed binary and opens a terminal through it. Writing it immediately caught
+two packaging bugs the workspace cannot show you:
+
+- `better-sqlite3` cannot be bundled by tsup — it pulls in `bindings`, whose
+  `__filename` cannot coexist with the top-level await in an ESM bundle. It is
+  external now, like node-pty.
+- The spawn-helper fix from bug 4 did not work under npm at all: npm *hoists*
+  node-pty to a sibling of the installed package, and the fixer only looked
+  inside the package's own `node_modules`. It now walks parent directories and
+  resolves the copy Node itself would load.
+
+One loose end worth knowing: hooks are written into an agent's project folder
+and only removed when you fire the agent. Killing the server leaves them behind,
+pointing at a port with nothing on it. They fail silently (`curl -s ... >/dev/null`)
+so nothing breaks, and restored agents get theirs rewritten on boot, but an agent
+whose database entry is gone leaves its hooks stranded in that folder.

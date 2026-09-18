@@ -10,7 +10,8 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "start": "node apps/cli/dist/index.js"
+    "start": "node apps/cli/dist/index.js",
+    "release:dry": "node scripts/release-dry.mjs"
   },
   "devDependencies": {
     "playwright": "1.63.0",

@@ -11,6 +11,7 @@ import { hookToEvents, type HookPayload } from "./hooks.js";
 import type { RunnerKind } from "./pickRunner.js";
 import { registerTerminalRoutes } from "./terminal.js";
 import { registerChatRoutes } from "./chat.js";
+import { MemoryStore, SqliteStore, type Store } from "./store.js";
 
 export interface ServerOptions {
   runner?: SessionRunner;
@@ -23,13 +24,20 @@ export interface ServerOptions {
   logger?: boolean | { level: string };
   /** port this server will listen on; used to build the hook/statusline URLs written into agents' .claude/settings.local.json. Hooks are not installed when omitted. */
   port?: number;
+  /** Where agents and tickets are persisted. Defaults to SQLite under ~/.agent-office; pass a MemoryStore for a throwaway office. */
+  store?: Store;
 }
 
 export async function createServer(opts: ServerOptions = {}) {
   const serverUrl = opts.port ? `http://127.0.0.1:${opts.port}` : undefined;
-  const office = new Office(opts.runner ?? new MockRunner(), { serverUrl });
+  const store = opts.store ?? (process.env.AGENT_OFFICE_PERSIST === "0" ? new MemoryStore() : new SqliteStore());
+  const office = new Office(opts.runner ?? new MockRunner(), { serverUrl, store });
   const runnerKind: RunnerKind = opts.runnerKind ?? (opts.runner ? "cli" : "mock");
-  if (shouldSeed(opts.seed ?? false, runnerKind, process.env.SEED)) seed(office);
+
+  const restored = office.restore();
+  // Hooks carry this run's port, and the port can change between runs.
+  if (restored.agents > 0) office.reinstallHooks();
+  if (shouldSeed(opts.seed ?? false, runnerKind, process.env.SEED, restored.agents)) seed(office);
 
   const app = Fastify({ logger: opts.logger ?? true });
   await app.register(websocket);
@@ -127,14 +135,15 @@ function handle(office: Office, m: ClientMessage): string | undefined {
 }
 
 /**
- * Demo data is for the mock runner only. Under the real CLI runner the seeded
+ * Demo data is for an empty office under the mock runner only. Under the real CLI runner the seeded
  * agents point at folders like ~/code/shop-api that don't exist on the user's
  * machine, and seed() assigns their tickets straight away — which means hook
  * config written into invented folders and a real `claude` spawned in a cwd
  * that isn't there. SEED=1 forces it anyway for deliberate demos.
  */
-export function shouldSeed(seedRequested: boolean, runnerKind: RunnerKind, seedEnv: string | undefined): boolean {
+export function shouldSeed(seedRequested: boolean, runnerKind: RunnerKind, seedEnv: string | undefined, restoredAgents = 0): boolean {
   if (!seedRequested) return false;
+  if (restoredAgents > 0) return false; // a real office was restored from disk; never bury it under demo data
   return runnerKind === "mock" || seedEnv === "1";
 }
 

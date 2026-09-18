@@ -15,6 +15,7 @@ import {
 } from "@agent-office/shared";
 import type { RunningSession, SessionRunner } from "./runner.js";
 import { installHooks, uninstallHooks } from "./hooks.js";
+import { MemoryStore, type Store } from "./store.js";
 
 const emptyMetrics = (): SessionMetrics => ({
   turns: 0,
@@ -33,8 +34,9 @@ const LOG_LIMIT = 60;
 
 /**
  * The Office holds agents, live state and tickets, drives sessions through a
- * SessionRunner, and broadcasts changes. In-memory for M1/M2; persistence
- * (SQLite) plugs in behind load()/save() later.
+ * SessionRunner, and broadcasts changes. Agents and tickets are written
+ * through to a Store so they survive a restart; live state is not, because it
+ * belongs to a `claude` process that does not.
  */
 export class Office {
   private agents = new Map<string, Agent>();
@@ -45,10 +47,46 @@ export class Office {
   /** Count of /api/hook POSTs received this run, for the "hooks reachable" setup check. */
   hookHits = 0;
 
+  private store: Store;
+
   constructor(
     private runner: SessionRunner,
-    private opts: { serverUrl?: string } = {},
-  ) {}
+    private opts: { serverUrl?: string; store?: Store } = {},
+  ) {
+    this.store = opts.store ?? new MemoryStore();
+  }
+
+  /**
+   * Rehydrates a previous run: agents return to their desks idle, the board
+   * comes back as it was. Anything that was mid-flight is back in the backlog
+   * (see statusAfterRestart) because the session working it did not survive.
+   * Returns how much was restored, for the startup log.
+   */
+  restore(): { agents: number; tickets: number } {
+    const sessionIds = this.store.loadSessionIds();
+    for (const agent of this.store.loadAgents()) {
+      this.agents.set(agent.id, agent);
+      this.states.set(agent.id, {
+        agentId: agent.id,
+        status: "idle",
+        sessionId: sessionIds.get(agent.id) ?? null,
+        ticketId: null,
+        metrics: emptyMetrics(),
+        subagents: [],
+        log: ["back at their desk"],
+      });
+    }
+    for (const ticket of this.store.loadTickets()) this.tickets.set(ticket.id, ticket);
+    return { agents: this.agents.size, tickets: this.tickets.size };
+  }
+
+  /** Agents restored from disk still need their hooks pointing at this run's port. */
+  reinstallHooks(): void {
+    if (!this.opts.serverUrl) return;
+    for (const agent of this.agents.values()) {
+      installHooks(agent, this.opts.serverUrl).catch((err) => console.error(`installHooks(${agent.id}) failed:`, err));
+    }
+  }
 
   subscribe(fn: (m: ServerMessage) => void): () => void {
     this.listeners.add(fn);
@@ -103,6 +141,7 @@ export class Office {
       log: [`hired as ${preset.label}`],
     };
     this.states.set(agent.id, state);
+    this.store.saveAgent(agent);
     this.broadcast({ type: "agent.upsert", agent });
     this.broadcast({ type: "state.update", state });
     if (this.opts.serverUrl) {
@@ -121,6 +160,7 @@ export class Office {
     }
     this.agents.delete(agentId);
     this.states.delete(agentId);
+    this.store.deleteAgent(agentId);
     this.broadcast({ type: "agent.removed", agentId });
     if (agent && this.opts.serverUrl) {
       uninstallHooks(agent).catch((err) => console.error(`uninstallHooks(${agent.id}) failed:`, err));
@@ -141,6 +181,7 @@ export class Office {
       updatedAt: now(),
     };
     this.tickets.set(t.id, t);
+    this.store.saveTicket(t);
     this.broadcast({ type: "ticket.upsert", ticket: t });
     return t;
   }
@@ -150,6 +191,7 @@ export class Office {
     if (!t) return;
     const next = { ...t, ...patch, updatedAt: now() };
     this.tickets.set(id, next);
+    this.store.saveTicket(next);
     this.broadcast({ type: "ticket.upsert", ticket: next });
     return next;
   }
@@ -159,6 +201,7 @@ export class Office {
     if (!t) return;
     if (t.assignedAgentId) this.stopSession(t.assignedAgentId);
     this.tickets.delete(id);
+    this.store.deleteTicket(id);
     this.broadcast({ type: "ticket.removed", ticketId: id });
   }
 
@@ -246,6 +289,8 @@ export class Office {
     switch (e.kind) {
       case "started":
         state.sessionId = e.sessionId;
+        // Remembered across restarts so the terminal can still --resume this conversation.
+        this.store.saveAgentSession(agentId, e.sessionId);
         state.status = "thinking";
         if (ticketId) this.updateTicket(ticketId, { sessionId: e.sessionId, status: "in_progress" });
         break;
@@ -351,7 +396,10 @@ export class Office {
     if (this.sessions.has(agentId)) return;
     switch (e.kind) {
       case "started":
-        if (!state.ticketId) state.sessionId = e.sessionId;
+        if (!state.ticketId) {
+          state.sessionId = e.sessionId;
+          this.store.saveAgentSession(agentId, e.sessionId);
+        }
         state.status = "thinking";
         break;
       case "thinking":

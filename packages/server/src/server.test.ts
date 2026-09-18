@@ -19,6 +19,11 @@ describe("shouldSeed", () => {
     expect(shouldSeed(true, "cli", "1")).toBe(true);
   });
 
+  it("never buries a restored office under demo data", () => {
+    expect(shouldSeed(true, "mock", undefined, 2)).toBe(false);
+    expect(shouldSeed(true, "cli", "1", 2)).toBe(false);
+  });
+
   it("never seeds when seeding was turned off", () => {
     expect(shouldSeed(false, "mock", "1")).toBe(false);
     expect(shouldSeed(false, "cli", "1")).toBe(false);

@@ -9,25 +9,50 @@
  * never fails the install: a missing helper only means no terminal.
  */
 import { chmodSync, existsSync, readdirSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, parse } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** Every node_modules/node-pty that could be installed for this package (npm flat, pnpm store). */
+/** node_modules directories to search: the package's own, then every parent's (npm hoists). */
+function moduleDirs(root) {
+  const dirs = [];
+  let current = root;
+  const { root: fsRoot } = parse(root);
+  while (true) {
+    const modules = join(current, "node_modules");
+    if (existsSync(modules)) dirs.push(modules);
+    if (current === fsRoot) break;
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return dirs;
+}
+
+/** Every node-pty install this package could load: hoisted by npm, nested, or in a pnpm store. */
 function nodePtyRoots(root) {
-  const modules = join(root, "node_modules");
-  if (!existsSync(modules)) return [];
-  const roots = [];
-  const direct = join(modules, "node-pty");
-  if (existsSync(direct)) roots.push(direct);
-  const pnpmStore = join(modules, ".pnpm");
-  if (existsSync(pnpmStore)) {
-    for (const entry of readdirSync(pnpmStore)) {
-      if (!entry.startsWith("node-pty@")) continue;
-      const nested = join(pnpmStore, entry, "node_modules", "node-pty");
-      if (existsSync(nested)) roots.push(nested);
+  const roots = new Set();
+
+  // Authoritative: the copy Node itself would resolve from this script.
+  try {
+    roots.add(dirname(createRequire(import.meta.url).resolve("node-pty/package.json")));
+  } catch {
+    /* not resolvable from here — fall back to the scans below */
+  }
+
+  for (const modules of moduleDirs(root)) {
+    const direct = join(modules, "node-pty");
+    if (existsSync(direct)) roots.add(direct);
+    const pnpmStore = join(modules, ".pnpm");
+    if (existsSync(pnpmStore)) {
+      for (const entry of readdirSync(pnpmStore)) {
+        if (!entry.startsWith("node-pty@")) continue;
+        const nested = join(pnpmStore, entry, "node_modules", "node-pty");
+        if (existsSync(nested)) roots.add(nested);
+      }
     }
   }
-  return roots;
+  return [...roots];
 }
 
 /** Absolute paths of every spawn-helper shipped in a node-pty install. */

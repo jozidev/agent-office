@@ -13,10 +13,11 @@ const { runner, kind } = await pickRunner((msg: string) => console.log(`[agent-o
 // Silencing the logger entirely hid a server-side pty spawn failure behind a
 // blank terminal panel; "warn" keeps request noise out but lets errors through.
 const logger = process.env.AGENT_OFFICE_DEBUG ? true : { level: "warn" };
-const { app } = await createServer({ uiDir, seed: process.env.SEED !== "0", logger, runner, runnerKind: kind, port });
+const { app, office } = await createServer({ uiDir, seed: process.env.SEED !== "0", logger, runner, runnerKind: kind, port });
 await app.listen({ port, host: "127.0.0.1" });
 const url = `http://127.0.0.1:${port}`;
-console.log(`Agent Office running at ${url}`);
+const { agents, tickets } = office.snapshot();
+console.log(`Agent Office running at ${url} (${agents.length} agents, ${tickets.length} tickets, runner: ${kind})`);
 
 if (open) {
   const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
