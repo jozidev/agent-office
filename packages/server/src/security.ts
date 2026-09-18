@@ -1,0 +1,73 @@
+/**
+ * The trust boundary. Until this existed the server treated "bound to
+ * 127.0.0.1" as authorization, which it is not:
+ *
+ *  - WebSockets are exempt from the same-origin policy, so any page in any tab
+ *    could open `ws://127.0.0.1:4177/ws`, receive the full office snapshot and
+ *    then hire an agent and assign it a ticket — which spawns `claude` with
+ *    Bash allowlisted. Drive-by remote code execution. `Origin` stops this.
+ *  - A name that resolves to 127.0.0.1 makes the whole HTTP API same-origin to
+ *    the attacker's page, so `Origin` alone would still be bypassable. `Host`
+ *    stops that (DNS rebinding).
+ *
+ * A browser always sets `Origin` on a WS upgrade and always sets `Host`, so
+ * both checks bite exactly when the caller is a browser we did not serve. A
+ * *missing* `Origin` means a non-browser caller (curl, release-dry's own
+ * check, a local script); no origin check can authenticate those either way,
+ * so they pass here and are left to the session token. Pretending otherwise
+ * would break the release check while stopping no attacker.
+ */
+
+/** Where the UI runs under `pnpm dev`, when it is not served from our own port. */
+const VITE_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
+
+/** The only names that can legitimately reach a loopback-bound server. */
+const LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "[::1]"];
+
+export interface OriginOptions {
+  /** the port this server listens on; its loopback origins are always allowed */
+  port?: number;
+  /** true when the UI is not served from this origin, i.e. Vite is serving it */
+  dev?: boolean;
+  /** AGENT_OFFICE_ALLOWED_ORIGINS, comma separated, for setups we cannot guess */
+  extra?: string;
+}
+
+export function allowedOrigins({ port, dev, extra }: OriginOptions): string[] {
+  const out = new Set<string>();
+  if (port) for (const h of LOOPBACK_HOSTS) out.add(`http://${h}:${port}`);
+  if (dev) for (const o of VITE_DEV_ORIGINS) out.add(o);
+  for (const o of (extra ?? "").split(",").map((s) => s.trim()).filter(Boolean)) out.add(o);
+  return [...out];
+}
+
+/**
+ * True when this request may proceed. Absent Origin passes (see the file
+ * header); anything present must match the allowlist exactly — no prefix
+ * matching, since `http://127.0.0.1:4177.evil.com` starts with our origin.
+ */
+export function isAllowedOrigin(origin: string | undefined, allowed: readonly string[]): boolean {
+  if (!origin) return true;
+  return allowed.includes(origin);
+}
+
+/**
+ * True when the Host header names a loopback address. Unlike Origin this must
+ * fail closed on absence: HTTP/1.1 requires Host, so a missing one is not a
+ * friendly non-browser client, it is someone hand-rolling a request.
+ *
+ * The port is checked when known, so a rebound name cannot ride in on a
+ * matching hostname with a different port.
+ */
+export function isAllowedHost(host: string | undefined, port?: number): boolean {
+  if (!host) return false;
+  const at = host.lastIndexOf(":");
+  // An IPv6 literal is bracketed, so the last colon is the port separator only
+  // when it comes after the closing bracket.
+  const hasPort = at > host.lastIndexOf("]");
+  const name = hasPort ? host.slice(0, at) : host;
+  const given = hasPort ? host.slice(at + 1) : "";
+  if (!LOOPBACK_HOSTS.includes(name)) return false;
+  if (port === undefined) return true;
+  return given === String(port);
+}

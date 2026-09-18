@@ -1,8 +1,8 @@
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { expandHome } from "./setup.js";
+import { allowedRoots, isInsideRoot, normalisePath } from "./paths.js";
 
 /**
  * Read-only directory listing, so hiring an agent can offer a folder picker
@@ -10,7 +10,9 @@ import { expandHome } from "./setup.js";
  * produce an agent whose folder does not exist (issue #1); now you browse to
  * it, and anything typed by hand is checked before the hire goes through.
  *
- * Directories only, never file contents, and the server is bound to 127.0.0.1.
+ * Directories only, never file contents, and confined to the allowed roots
+ * (the home directory by default, AGENT_OFFICE_FS_ROOT to override). Without
+ * that confinement this listed any absolute path on the disk.
  */
 
 export interface DirEntry {
@@ -25,24 +27,38 @@ export interface DirListing {
   entries: DirEntry[];
 }
 
-/** Resolve first: `..` in a path should mean what it means in a shell, not something surprising. */
-function normalise(input: string | undefined): string {
-  return resolve(expandHome(input && input.trim() ? input : homedir()));
+/**
+ * Resolve first, then confine: `..` should mean what it means in a shell, and
+ * the confinement check is only meaningful once the path is fully resolved.
+ */
+function normalise(input: string | undefined, roots: readonly string[]): string {
+  const path = normalisePath(input && input.trim() ? input : homedir());
+  if (!isInsideRoot(path, roots)) throw new Error(`path is outside the allowed roots: ${path}`);
+  return path;
 }
 
-export async function listDirs(input: string | undefined, opts: { hidden?: boolean } = {}): Promise<DirListing> {
-  const path = normalise(input);
+export async function listDirs(
+  input: string | undefined,
+  opts: { hidden?: boolean; roots?: readonly string[] } = {},
+): Promise<DirListing> {
+  const roots = opts.roots ?? allowedRoots();
+  const path = normalise(input, roots);
   const dirents = await readdir(path, { withFileTypes: true });
   const entries = dirents
     .filter((d) => d.isDirectory() && (opts.hidden || !d.name.startsWith(".")))
     .map((d) => ({ name: d.name, path: join(path, d.name) }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  // Stop "up" at a root rather than walking out of it.
   const parent = dirname(path);
-  return { path, parent: parent === path ? null : parent, entries };
+  const canGoUp = parent !== path && isInsideRoot(parent, roots);
+  return { path, parent: canGoUp ? parent : null, entries };
 }
 
-export async function statPath(input: string | undefined): Promise<{ path: string; exists: boolean; isDir: boolean }> {
-  const path = normalise(input);
+export async function statPath(
+  input: string | undefined,
+  opts: { roots?: readonly string[] } = {},
+): Promise<{ path: string; exists: boolean; isDir: boolean }> {
+  const path = normalise(input, opts.roots ?? allowedRoots());
   try {
     const s = await stat(path);
     return { path, exists: true, isDir: s.isDirectory() };
@@ -52,11 +68,12 @@ export async function statPath(input: string | undefined): Promise<{ path: strin
 }
 
 /** Registers `/api/fs/list` and `/api/fs/stat`. Call once from server.ts. */
-export function registerFsRoutes(app: FastifyInstance): void {
+export function registerFsRoutes(app: FastifyInstance, opts: { roots?: readonly string[] } = {}): void {
+  const roots = opts.roots;
   app.get("/api/fs/list", async (req, reply) => {
     const q = req.query as { path?: string; hidden?: string };
     try {
-      return await listDirs(q.path, { hidden: q.hidden === "1" });
+      return await listDirs(q.path, { hidden: q.hidden === "1", ...(roots && { roots }) });
     } catch (err) {
       // An unreadable or missing folder is a normal thing to click on; answer
       // with a message the picker can show rather than a 500.
@@ -64,5 +81,11 @@ export function registerFsRoutes(app: FastifyInstance): void {
     }
   });
 
-  app.get("/api/fs/stat", async (req) => statPath((req.query as { path?: string }).path));
+  app.get("/api/fs/stat", async (req, reply) => {
+    try {
+      return await statPath((req.query as { path?: string }).path, { ...(roots && { roots }) });
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
 }

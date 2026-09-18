@@ -118,7 +118,7 @@ describe("writeLaunchScript", () => {
 
 describe("native handoff route", () => {
   async function serve(deps: Parameters<typeof registerNativeTerminalRoutes>[4], store = new MemoryStore()) {
-    const office = new Office(new MockRunner(), { store });
+    const office = new Office(new MockRunner(), { store, roots: ["/"] });
     const hired = office.hire({ name: "Ada", role: "coder", cwd: "/tmp" });
     const closed: string[] = [];
     const manager = { close: (id: string) => closed.push(id) } as unknown as TerminalManager;
