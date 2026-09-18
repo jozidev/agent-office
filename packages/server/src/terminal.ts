@@ -157,7 +157,21 @@ export function registerTerminalRoutes(app: FastifyInstance, office: Office, opt
       return;
     }
     const state = office.snapshot().states.find((s) => s.agentId === agentId);
-    const term = manager.open(agent, state?.sessionId ?? null);
+
+    // A pty that cannot spawn used to close the socket with no explanation:
+    // the client reconnects forever against a permanently blank panel. Say
+    // what happened in the terminal itself instead.
+    let term: Terminal;
+    try {
+      term = manager.open(agent, state?.sessionId ?? null);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      socket.send(`could not open a terminal for ${agent.name}: ${detail}\r\n`);
+      socket.send(`\r\nthis usually means node-pty's spawn-helper is not executable — run \`pnpm install\` again, or:\r\n`);
+      socket.send(`  node scripts/fix-pty-permissions.mjs\r\n`);
+      socket.close(1011, "pty spawn failed");
+      return;
+    }
 
     if (term.ring.value) socket.send(term.ring.value);
 

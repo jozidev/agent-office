@@ -23,6 +23,7 @@ Machine: macOS (darwin 25.5.0, arm64), Node v25.6.0, pnpm 10.28.0, `claude` 2.1.
 | 1 | A failed `claude` spawn killed the whole server | high | fixed |
 | 2 | Demo seed ran real sessions in folders that don't exist | high | fixed |
 | 3 | Hiring into a non-existent folder silently created it | medium | fixed |
+| 4 | node-pty's spawn-helper installs without its executable bit, so no terminal ever opened | high | fixed |
 
 ### 1. A failed spawn took the server down
 
@@ -54,3 +55,44 @@ The real runner starts empty; `SEED=1` still forces the demo for screenshots.
 invented the whole path rather than failing. A typo in the hire form would
 scatter `.claude` folders around the disk. `installHooks` now requires the
 folder to exist.
+
+### 4. Every pty spawn failed: `posix_spawnp failed.`
+
+Clicking an agent opened a permanently blank terminal. No claude process was
+ever spawned, nothing appeared in the server output, and the client sat in a
+reconnect loop.
+
+Two causes stacked:
+
+- `apps/cli` starts the server with `logger: false`, so the Fastify error was
+  swallowed. Running `main.ts` (logger on) surfaced `posix_spawnp failed.`
+  thrown by node-pty.
+- node-pty ships `prebuilds/<platform>/spawn-helper`, and pnpm 10 extracted it
+  as `-rw-r--r--`. Without the executable bit node-pty cannot spawn anything,
+  not even `/bin/zsh`. `chmod +x` fixed every spawn immediately.
+
+Fixed with `scripts/fix-pty-permissions.mjs`, run on postinstall from both the
+workspace root and the published CLI package (npx installs node-pty fresh, so
+it needs the same repair). The terminal route now also reports a spawn failure
+into the terminal instead of closing the socket with no explanation.
+
+## Verified working end to end
+
+Against the real `claude` 2.1.276, runner `cli`, agent folder
+`~/Development/agent-office-scratch`:
+
+- Hire writes hooks + statusline into `<folder>/.claude/settings.local.json`.
+- Drag-to-assign starts a real headless session; `hello.txt` and `goodbye.txt`
+  were actually written by the agent.
+- Ticket moved backlog to assigned to in_progress to done; agent returned to idle.
+- Setup page "Claude Code hooks reachable" went to ok (5 hook events), overall ok.
+- Tooltip showed live turns, elapsed, cost, context bar and the current tool.
+- Idle "zzz" bubble appears after ~15s; typing animation while busy.
+- Terminal panel runs `claude --resume <session id> --model sonnet
+  --permission-mode acceptEdits` in a pty (confirmed in `ps`).
+- Chat agent (no tools) answered a question through `/ws/chat/:agentId`.
+
+Note for the docs: the first interactive terminal in a folder hits Claude
+Code's own "Is this a project you trust?" prompt, which the user must answer in
+the terminal before the resumed session appears. Not a bug, but nothing in
+`docs/architecture.md` prepares you for it.

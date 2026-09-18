@@ -5,6 +5,7 @@
   "description": "Manage Claude Code agents as characters in an isometric office",
   "packageManager": "pnpm@10.28.0",
   "scripts": {
+    "postinstall": "node scripts/fix-pty-permissions.mjs",
     "dev": "pnpm -r --parallel --filter ./packages/server --filter ./packages/ui dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
