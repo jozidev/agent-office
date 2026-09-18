@@ -14,6 +14,7 @@ import {
   type TicketStatus,
 } from "@agent-office/shared";
 import type { RunningSession, SessionRunner } from "./runner.js";
+import { installHooks, uninstallHooks } from "./hooks.js";
 
 const emptyMetrics = (): SessionMetrics => ({
   turns: 0,
@@ -41,8 +42,13 @@ export class Office {
   private tickets = new Map<string, Ticket>();
   private sessions = new Map<string, RunningSession>();
   private listeners = new Set<(m: ServerMessage) => void>();
+  /** Count of /api/hook POSTs received this run, for the "hooks reachable" setup check. */
+  hookHits = 0;
 
-  constructor(private runner: SessionRunner) {}
+  constructor(
+    private runner: SessionRunner,
+    private opts: { serverUrl?: string } = {},
+  ) {}
 
   subscribe(fn: (m: ServerMessage) => void): () => void {
     this.listeners.add(fn);
@@ -99,10 +105,15 @@ export class Office {
     this.states.set(agent.id, state);
     this.broadcast({ type: "agent.upsert", agent });
     this.broadcast({ type: "state.update", state });
+    if (this.opts.serverUrl) {
+      // Fire-and-forget: hook install touches the agent's project folder on disk and must not block hiring.
+      installHooks(agent, this.opts.serverUrl).catch((err) => console.error(`installHooks(${agent.id}) failed:`, err));
+    }
     return agent;
   }
 
   fire(agentId: string) {
+    const agent = this.agents.get(agentId);
     this.sessions.get(agentId)?.stop();
     this.sessions.delete(agentId);
     for (const t of this.tickets.values()) {
@@ -111,6 +122,9 @@ export class Office {
     this.agents.delete(agentId);
     this.states.delete(agentId);
     this.broadcast({ type: "agent.removed", agentId });
+    if (agent && this.opts.serverUrl) {
+      uninstallHooks(agent).catch((err) => console.error(`uninstallHooks(${agent.id}) failed:`, err));
+    }
   }
 
   // ---------- tickets ----------
@@ -315,5 +329,127 @@ export class Office {
         break;
     }
     this.broadcast({ type: "state.update", state });
+  }
+
+  // ---------- external (hook-driven) state updates ----------
+
+  /**
+   * Applies a RunnerEvent derived from a Claude Code hook (see hooks.ts),
+   * for sessions the office didn't start itself — an interactive terminal
+   * session in an agent's folder. Deliberately separate from onEvent: hook
+   * events must never mutate ticket state (that stays driven by the real
+   * CliRunner session), and "done" here means the Stop hook fired, not that
+   * a ticket finished.
+   */
+  ingestExternal(agentId: string, e: RunnerEvent) {
+    const state = this.states.get(agentId);
+    if (!state) return;
+    switch (e.kind) {
+      case "started":
+        if (!state.ticketId) state.sessionId = e.sessionId;
+        state.status = "thinking";
+        break;
+      case "thinking":
+        state.status = "thinking";
+        break;
+      case "tool_use":
+        state.status = "tool_use";
+        state.metrics.lastToolName = e.name;
+        state.metrics.lastToolSummary = e.summary;
+        this.pushLog(state, `${e.name} ${e.summary}`);
+        break;
+      case "waiting":
+        state.status = "waiting";
+        this.pushLog(state, `asks: ${e.prompt}`);
+        break;
+      case "subagent_start": {
+        if (e.id && state.subagents.some((s) => s.id === e.id)) break;
+        const sub: Subagent = {
+          id: e.id,
+          parentAgentId: agentId,
+          type: e.type,
+          description: e.description,
+          status: "thinking",
+          metrics: { ...emptyMetrics(), startedAt: now() },
+        };
+        state.subagents.push(sub);
+        this.pushLog(state, `spawned ${e.type}: ${e.description}`);
+        break;
+      }
+      case "subagent_tool": {
+        const sub = state.subagents.find((s) => s.id === e.id);
+        if (sub) {
+          sub.status = "tool_use";
+          sub.metrics.lastToolName = e.name;
+          sub.metrics.lastToolSummary = e.summary;
+          sub.metrics.turns += 1;
+        }
+        break;
+      }
+      case "subagent_stop": {
+        // Prefer an id match (agent_id/tool_use_id from the hook); Notification/Stop-adjacent hooks don't always carry one, so fall back to the oldest open tile.
+        const idx = e.id ? state.subagents.findIndex((s) => s.id === e.id) : 0;
+        if (idx >= 0) state.subagents.splice(idx, 1);
+        break;
+      }
+      case "done":
+        // A Stop hook: the current turn ended. Only settle to idle if no ticket is actively running this agent — otherwise the real CliRunner session owns the final state.
+        this.pushLog(state, e.summary);
+        if (!state.ticketId) state.status = "idle";
+        break;
+      case "error":
+        this.pushLog(state, `error: ${e.message}`);
+        if (!state.ticketId) state.status = "idle";
+        break;
+      case "usage":
+      case "context":
+        // Not tracked for external sessions: these numbers belong to whichever session the ticket metrics panel is already showing.
+        break;
+    }
+    this.broadcast({ type: "state.update", state });
+  }
+
+  /**
+   * Statusline forwarder POST (see hooks.ts statusLineCommand). Body shape
+   * per https://code.claude.com/docs/en/statusline: `context_window.used_percentage`
+   * is the documented simplest source (0..100); we fall back to computing it
+   * from token counts if a future/older CLI build only sends those. Anything
+   * else about the shape is ignored — this must never throw on odd input.
+   */
+  ingestStatusline(agentId: string, body: unknown) {
+    const state = this.states.get(agentId);
+    if (!state || state.ticketId) return; // a ticket's own CliRunner context readout takes precedence
+    const b = (body ?? {}) as Record<string, unknown>;
+    const cw = (b["context_window"] ?? {}) as Record<string, unknown>;
+    let pct: number | null = null;
+    if (typeof cw["used_percentage"] === "number") {
+      pct = cw["used_percentage"] / 100;
+    } else {
+      const size = cw["context_window_size"];
+      const input = cw["total_input_tokens"];
+      const output = cw["total_output_tokens"];
+      if (typeof size === "number" && size > 0 && typeof input === "number" && typeof output === "number") {
+        pct = (input + output) / size;
+      }
+    }
+    if (pct === null || Number.isNaN(pct)) return;
+    state.metrics.contextPct = Math.max(0, Math.min(1, pct));
+    this.broadcast({ type: "state.update", state });
+  }
+
+  /**
+   * SessionEnd hook: no RunnerEvent maps to "go idle", so this is called
+   * directly by the /api/hook route. Guarded by "no ticket running" for the
+   * same reason as the "done" case above: hooks fire for every session in
+   * that folder, and a ticket's real completion must stay owned by CliRunner.
+   */
+  forceIdle(agentId: string) {
+    const state = this.states.get(agentId);
+    if (!state) return;
+    if (!state.ticketId) {
+      state.status = "idle";
+      this.pushLog(state, "session ended");
+      this.broadcast({ type: "state.update", state });
+    }
   }
 }

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { ROLE_PRESETS } from "@agent-office/shared";
 import { useOffice, statusColor, statusLabel } from "../store";
+import { TerminalPanel } from "./Terminal";
+import { ChatPanel } from "./Chat";
 
 export function AgentPanel() {
   const id = useOffice((s) => s.selectedAgentId);
@@ -53,12 +55,8 @@ export function AgentPanel() {
           </div>
         )}
 
-        <div className="terminal-stub">
-          {agent.uiMode === "chat" ? "chat box" : "terminal"} lands here in milestone 4 (xterm.js against the agent's pty).
-          <br />
-          <br />
-          For now this is the event log:
-        </div>
+        {agent.uiMode === "chat" ? <ChatPanel agentId={agent.id} agentName={agent.name} /> : <TerminalPanel agentId={agent.id} agentName={agent.name} />}
+
         <div className="log" style={{ marginTop: 8 }}>
           {state.log.length ? state.log.join("\n") : "nothing yet"}
         </div>

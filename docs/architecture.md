@@ -40,9 +40,9 @@ Rule: anything that touches the filesystem, processes, or the CLI lives in `serv
 
 - **Agent registry**: record per agent (id, name, role preset, colour, model, working directory, system prompt, allowed tools, permission mode, desk). In-memory now; SQLite under `~/.agent-office/` later.
 - **Role presets**: Coder (full tools, acceptEdits, terminal UI), Reviewer (read-only, plan mode), Chat (no tools, chat UI), Assistant (file and web tools, chat UI), Custom.
-- **Session runner**: per ticket, spawns `claude -p "<ticket>" --output-format stream-json --verbose` in the agent's cwd with the agent's flags. Parses the JSON stream for messages, tool use, usage, cost, and result. Session id kept for `--resume`. Currently `MockRunner`.
+- **Session runner**: per ticket, spawns `claude -p "<ticket>" --output-format stream-json --verbose` in the agent's cwd with the agent's flags. Parses the JSON stream for messages, tool use, usage, cost, and result. Session id kept for `--resume`. `CliRunner` (real) and `MockRunner` (demo/dev) both implement `SessionRunner`; `pickRunner()` chooses between them (env override, else whether `claude` is on PATH).
 - **Terminal manager**: spawns `claude --resume <sessionId>` in a node-pty; streams to xterm.js. Pty stays alive when the popup closes; killed on agent delete.
-- **Hook receiver**: `POST /api/hook`. On agent creation the app writes hooks into the agent project's `.claude/settings.local.json` plus a statusline command that forwards context-window JSON. Normalised into `RunnerEvent`s.
+- **Hook receiver**: `POST /api/hook` and `POST /api/statusline`. On hire the app writes hooks (SessionStart, PreToolUse, PostToolUse, SubagentStop, Stop, SessionEnd, Notification) into the agent project's `.claude/settings.local.json` (`hooks.ts: installHooks`/`uninstallHooks`, everything it owns marked `agent-office`) plus a statusline command that forwards context-window JSON. Normalised into `RunnerEvent`s (`hooks.ts: hookToEvents`) and applied via `Office.ingestExternal`/`forceIdle`, which update status/subagents/log the same way a ticket-driven session does but never touch ticket state — so an interactive terminal session in an agent's folder shows status without needing a ticket, without a stray `Stop`/`SessionEnd` from that session ending a real ticket run.
 - **Subagent tracking**: PreToolUse on the Agent tool gives type, description, prompt; SubagentStop closes it. No per-subagent stop exists.
 - **Board**: tickets; assign = start a session run. One ticket per agent at a time.
 - **Inventory manager**: MCP servers (`claude mcp`, `~/.claude.json`, `.mcp.json`), skills (`SKILL.md` folders), plugins (`claude plugin`, `enabledPlugins`), subagent definitions (`.claude/agents/*.md`), CLAUDE.md and settings editor.
@@ -64,13 +64,26 @@ Rule: anything that touches the filesystem, processes, or the CLI lives in `serv
 
 1. Scaffold; office scene with mocked agents, roles, statuses, tooltips, call bubble. Done.
 2. Board with drag-to-assign; mocked sessions. Done.
-3. Real sessions via headless CLI; hooks and statusline forwarder.
-4. Pty terminal popup and chat-box UI.
+3. Real sessions via headless CLI; hooks and statusline forwarder. Done.
+4. Pty terminal popup and chat-box UI. Done.
 5. `npx` first-run setup (checks `claude` is installed and logged in).
 6. Inventory: supply closet UI.
 7. Usage collector, office gauges, stats view.
 8. Optional SDK / API-key mode.
 9. Tauri shell.
+
+## Milestone 3 notes
+
+Verified against `claude` 2.1.276 (Claude Code) with `--output-format stream-json --verbose`. NDJSON fixtures captured from real runs live in `packages/server/src/__fixtures__/` and drive `cliRunner.test.ts`.
+
+- This account's CLI build emits extra NDJSON message types beyond the documented minimum (`active_goal`, `autocompact_state`, `rate_limit_event`, `stream_event` for token-level streaming deltas). The parser only reacts to `system`/`assistant`/`result` and ignores everything else, so this is harmless and future-proof against new types.
+- The subagent tool this build launches is named **`Agent`**, not `Task`; the parser accepts either name. Its `input` had no `subagent_type` field (only `description`/`prompt`), so we default to `"general-purpose"`.
+- A subagent's own tool calls arrive as ordinary `assistant` messages carrying `parent_tool_use_id` set to the `Agent`/`Task` tool_use's id — that id doubles as the subagent id everything else (Office, the UI tiles) keys on.
+- Each assistant message's `usage` block (`input_tokens`, `output_tokens`, `cache_read_input_tokens`) is per-turn, not cumulative, so CliRunner sums them itself for the running totals shown in the UI; `total_cost_usd` (cumulative) only appears on the final `result` message. Context-window percentage is computed per message directly (`(input + cache_read + output) / 200000`), not from the running sums, since `cache_read_input_tokens` already reflects how much prior conversation is in context.
+- A failed run surfaces as `{"type":"result","subtype":"error_max_turns" (or other non-"success"),"is_error":true}` — confirmed by forcing `--max-turns 1` against a multi-tool-call prompt.
+- Hooks (https://code.claude.com/docs/en/hooks) and statusline (https://code.claude.com/docs/en/statusline) field names were confirmed against the current docs, not just this account's CLI, since hooks weren't exercised as thoroughly as the stream-json parser: `hook_event_name`, `session_id`, `tool_name`, `tool_input`, `tool_use_id`, `agent_id` (subagent-only), `notification_type`/`message` (Notification), `last_assistant_message` (Stop/SubagentStop). Statusline's simplest context source is `context_window.used_percentage` (0–100).
+- End-to-end smoke test: hired a real agent, assigned a ticket, let `CliRunner` run the actual `claude` CLI end to end — hooks installed into `.claude/settings.local.json`, hook POSTs arrived at `/api/hook` (`hooks-reachable` setup check went to `ok`), and the session's own `usage`/`context`/`done` events drove the agent to `idle` on completion.
+- Not verified: a real `waiting` (permission-prompt) hook `Notification`, since headless `-p` sessions with `acceptEdits`/`bypassPermissions` never prompt; the mapping in `hooks.ts` follows the documented `notification_type`/`message` fields but wasn't exercised against a live prompt. Also not verified: hooks firing from an actual interactive `claude --resume` terminal session (pty terminal is milestone 4) — `ingestExternal`/`forceIdle` are covered by unit tests only.
 
 ## References
 

@@ -6,6 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      "/ws/terminal": { target: "ws://127.0.0.1:4177", ws: true },
+      "/ws/chat": { target: "ws://127.0.0.1:4177", ws: true },
       "/ws": { target: "ws://127.0.0.1:4177", ws: true },
       "/api": "http://127.0.0.1:4177",
     },

@@ -14,6 +14,8 @@
     "@agent-office/shared": "workspace:*",
     "@react-three/drei": "^9.114.0",
     "@react-three/fiber": "^8.17.10",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.169.0",

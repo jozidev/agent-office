@@ -7,17 +7,27 @@ import { Office } from "./office.js";
 import { MockRunner } from "./mockRunner.js";
 import type { SessionRunner } from "./runner.js";
 import { runSetupChecks } from "./setup.js";
+import { hookToEvents, type HookPayload } from "./hooks.js";
+import type { RunnerKind } from "./pickRunner.js";
+import { registerTerminalRoutes } from "./terminal.js";
+import { registerChatRoutes } from "./chat.js";
 
 export interface ServerOptions {
   runner?: SessionRunner;
+  /** "cli" | "mock", purely informational — reported at /api/runner. Defaults to "mock" when runner is omitted, "cli" otherwise. */
+  runnerKind?: RunnerKind;
   /** absolute path to built UI (index.html); served at / when present */
   uiDir?: string;
   seed?: boolean;
   logger?: boolean;
+  /** port this server will listen on; used to build the hook/statusline URLs written into agents' .claude/settings.local.json. Hooks are not installed when omitted. */
+  port?: number;
 }
 
 export async function createServer(opts: ServerOptions = {}) {
-  const office = new Office(opts.runner ?? new MockRunner());
+  const serverUrl = opts.port ? `http://127.0.0.1:${opts.port}` : undefined;
+  const office = new Office(opts.runner ?? new MockRunner(), { serverUrl });
+  const runnerKind: RunnerKind = opts.runnerKind ?? (opts.runner ? "cli" : "mock");
   if (opts.seed) seed(office);
 
   const app = Fastify({ logger: opts.logger ?? true });
@@ -30,11 +40,31 @@ export async function createServer(opts: ServerOptions = {}) {
 
   app.get("/api/health", async () => ({ ok: true }));
   app.get("/api/snapshot", async () => office.snapshot());
-  app.get("/api/setup", async () => runSetupChecks(office.snapshot().agents));
+  app.get("/api/setup", async () => runSetupChecks(office.snapshot().agents, office.hookHits));
+  app.get("/api/runner", async () => ({ runner: runnerKind }));
 
-  /** Claude Code hooks POST here (M3). Accepted now so hook config can be written early. */
+  registerTerminalRoutes(app, office); // M4: /ws/terminal/:agentId (pty popup)
+  registerChatRoutes(app, office); // M4: /ws/chat/:agentId (chat-role agents)
+
+  /** Claude Code hooks (SessionStart/PreToolUse/.../SessionEnd) POST here, one per event; see hooks.ts for the mapping. */
   app.post("/api/hook", async (req) => {
-    app.log.debug({ hook: req.body }, "hook");
+    office.hookHits += 1;
+    const agentId = (req.query as Record<string, string>)?.["agent"];
+    if (!agentId) return { ok: false, error: "missing agent" };
+    const payload = (req.body ?? {}) as HookPayload;
+    if (payload.hook_event_name === "SessionEnd") {
+      office.forceIdle(agentId);
+    } else {
+      for (const e of hookToEvents(payload)) office.ingestExternal(agentId, e);
+    }
+    return { ok: true };
+  });
+
+  /** The statusLine forwarder POSTs its stdin JSON here; see hooks.ts statusLineCommand. */
+  app.post("/api/statusline", async (req) => {
+    const agentId = (req.query as Record<string, string>)?.["agent"];
+    if (!agentId) return { ok: false, error: "missing agent" };
+    office.ingestStatusline(agentId, req.body);
     return { ok: true };
   });
 

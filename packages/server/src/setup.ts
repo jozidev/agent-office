@@ -35,7 +35,7 @@ async function writable(p: string): Promise<boolean> {
  * is read-only; fixes are separate, explicit actions. Each check reports
  * ok / warn / fail plus a plain-language hint.
  */
-export async function runSetupChecks(agents: Agent[]): Promise<SetupReport> {
+export async function runSetupChecks(agents: Agent[], hookHits = 0): Promise<SetupReport> {
   const checks: SetupCheck[] = [];
   const home = homedir();
   const claudeDir = join(home, ".claude");
@@ -128,6 +128,15 @@ export async function runSetupChecks(agents: Agent[]): Promise<SetupReport> {
     }
     checks.push({ id: `agent:${a.id}`, label: `${a.name}'s folder`, status, detail, hint });
   }
+
+  // Confirms the loop is actually closed: hooks were installed AND at least one has POSTed back this run.
+  checks.push({
+    id: "hooks-reachable",
+    label: "Claude Code hooks reachable",
+    status: hookHits > 0 ? "ok" : "warn",
+    detail: hookHits > 0 ? `${hookHits} hook event(s) received` : "no hook events received yet this run",
+    hint: hookHits > 0 ? undefined : "Runs once an agent's session sends its first hook event (e.g. SessionStart). Not fired by pure mock sessions.",
+  });
 
   const worst = checks.some((c) => c.status === "fail") ? "fail" : checks.some((c) => c.status === "warn") ? "warn" : "ok";
   return { checkedAt: new Date().toISOString(), overall: worst, checks };

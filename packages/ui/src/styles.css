@@ -70,7 +70,41 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
 .panel .kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 8px; color: var(--muted); margin-bottom: 12px; }
 .panel .kv b { color: var(--text); font-weight: 500; }
 .panel .respond { display: flex; gap: 6px; margin-top: 8px; }
-.terminal-stub { background: #0d0f14; border: 1px solid var(--line); border-radius: 6px; padding: 12px; color: var(--muted); margin-top: 12px; min-height: 120px; }
+.terminal-panel, .chat-panel {
+  background: #0d0f14; border: 1px solid var(--line); border-radius: 6px; margin-top: 12px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.terminal-panel-bar, .chat-panel-bar {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 8px;
+  border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+}
+.terminal-panel-bar button, .chat-panel-bar button, .float-titlebar button { padding: 2px 8px; font-size: 11px; }
+.xterm-host { height: 260px; padding: 4px 6px; }
+.xterm-host--float { height: 100%; }
+
+.chat-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); display: inline-block; }
+.chat-dot.ok { background: var(--ok); }
+.chat-log { flex: 1; min-height: 180px; max-height: 260px; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.chat-empty { color: var(--muted); font-size: 12px; }
+.chat-line { font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+.chat-line.chat-you { color: var(--text); }
+.chat-line.chat-assistant { color: var(--text); }
+.chat-line.chat-tool { color: var(--muted); font-style: italic; }
+.chat-line.chat-error { color: var(--bad); }
+.chat-input { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+.chat-input textarea { min-height: 34px; max-height: 90px; }
+.chat-input button { align-self: flex-end; }
+
+.float-window {
+  position: absolute; z-index: 50; background: var(--panel-solid); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.5); display: flex; flex-direction: column; overflow: hidden;
+  min-width: 320px; min-height: 200px;
+}
+.float-titlebar {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 10px;
+  background: var(--panel-2); border-bottom: 1px solid var(--line); cursor: grab; user-select: none; font-size: 12px;
+}
+.float-titlebar:active { cursor: grabbing; }
 
 .board {
   position: absolute; top: 44px; left: 0; bottom: 0; width: 560px; background: var(--panel-solid);

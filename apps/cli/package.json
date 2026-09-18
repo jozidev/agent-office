@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@agent-office/server": "workspace:*",
-    "@agent-office/shared": "workspace:*"
+    "@agent-office/shared": "workspace:*",
+    "node-pty": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",

@@ -6,7 +6,11 @@ export default defineConfig({
   format: ["esm"],
   target: "node20",
   clean: true,
-  noExternal: [/.*/],
+  // Bundle every dependency except node-pty, which ships a native addon and
+  // cannot be bundled into a single file (its .node binary is loaded via a
+  // path relative to node-pty's own package, not the bundle).
+  noExternal: [/^(?!node-pty$).+/],
+  external: ["node-pty"],
   banner: {
     js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
   },
