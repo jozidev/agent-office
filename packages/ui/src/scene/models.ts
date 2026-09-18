@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
 import { SkeletonUtils } from "three-stdlib";
-import { Color, Mesh, type Material, type MeshStandardMaterial, type Object3D } from "three";
+import { Box3, Color, Group, Mesh, Vector3, type Material, type MeshStandardMaterial, type Object3D } from "three";
 
 /** Furniture Kit ships light pine + silver; recolour to match the dark office. */
 const FURNITURE_PALETTE: Record<string, string> = {
@@ -10,9 +10,9 @@ const FURNITURE_PALETTE: Record<string, string> = {
   metal: "#3b4150",
   metalMedium: "#2e333f",
   metalDark: "#1f232c",
-  carpet: "#3f4658",
-  carpetDarker: "#333a4a",
-  carpetWhite: "#6b7386",
+  carpet: "#5a6577",
+  carpetDarker: "#46505e",
+  carpetWhite: "#7d8798",
   lamp: "#d8cfb8",
 };
 const recoloured = new WeakSet<Material>();
@@ -48,6 +48,15 @@ export function useModelClone(url: string): Object3D {
         }
       }
     });
+    if (url.includes("/furniture/")) {
+      // Kenney furniture has its origin at a corner; recentre so position = centre of footprint, y = floor.
+      const box = new Box3().setFromObject(clone);
+      const c = box.getCenter(new Vector3());
+      const wrapper = new Group();
+      clone.position.set(-c.x, -box.min.y, -c.z);
+      wrapper.add(clone);
+      return wrapper;
+    }
     return clone;
   }, [gltf.scene, url]);
 }

@@ -1,8 +1,7 @@
 import { Suspense } from "react";
 import { Html } from "@react-three/drei";
 import { Furniture } from "./Furniture";
-import { islandCount, islandPosition, roomSize, KITCHEN_DEPTH, SIDE_DEPTH, PAD } from "./layout";
-import { Island } from "./Island";
+import { rowEnds, roomSize, KITCHEN_DEPTH, PAD } from "./layout";
 
 const WALL_H = 2.7;
 const LOW_WALL_H = 0.55;
@@ -10,16 +9,15 @@ const T = 0.16;
 
 /**
  * An enclosed office: full back walls with windows, low cut-away front walls
- * with a door, a kitchen strip along the back, meeting table and lounge along
- * the right, bookcase and supply closet on the left. Desk islands in the middle.
+ * with a door, a kitchen strip along the back,
+ * the front (+x), bookcase and supply closet on the left. Desk rows in the middle.
  */
 export function Room({ agentCount }: { agentCount: number }) {
   const { w, d } = roomSize(agentCount);
   const hw = w / 2;
   const hd = d / 2;
-  const islands = Array.from({ length: islandCount(agentCount) }, (_, i) => islandPosition(i, agentCount));
+  const ends = rowEnds(agentCount);
   const kitchenZ = -hd + KITCHEN_DEPTH / 2 + 0.2;
-  const sideX = hw - SIDE_DEPTH / 2;
 
   return (
     <group>
@@ -73,7 +71,7 @@ export function Room({ agentCount }: { agentCount: number }) {
           </mesh>
         </group>
         <Suspense fallback={null}>
-          <Furniture name="rugDoormat" position={[-0.4, 0.01, -0.5]} />
+          <Furniture name="rugDoormat" position={[0, 0.01, -0.5]} />
         </Suspense>
       </group>
       {/* skirting */}
@@ -106,19 +104,19 @@ export function Room({ agentCount }: { agentCount: number }) {
 
       <Suspense fallback={null}>
         {/* kitchen strip along the back wall (left part) */}
-        <group position={[-hw + 0.25, 0, -hd + 0.25]} scale={0.8}>
-          <Furniture name="kitchenFridge" position={[0.2, 0, 0.55]} rotation={[0, Math.PI / 2, 0]} />
-          <Furniture name="kitchenCabinetDrawer" position={[1.0, 0, 0.75]} />
-          <Furniture name="kitchenSink" position={[2.05, 0, 0.75]} />
-          <Furniture name="kitchenCabinet" position={[3.1, 0, 0.75]} />
-          <Furniture name="kitchenMicrowave" position={[3.25, 0.95, 0.7]} scale={0.9} />
-          <Furniture name="kitchenCoffeeMachine" position={[1.15, 0.95, 0.65]} />
-          <Furniture name="kitchenCabinetUpper" position={[2.05, 1.55, 0.35]} />
-          <Furniture name="trashcan" position={[4.2, 0, 0.5]} />
-          <Label text="kitchen" position={[2.2, 2.3, 0.7]} />
+        <group position={[-hw + 0.9, 0, -hd + 0.65]} scale={0.8}>
+          <Furniture name="kitchenFridge" position={[0, 0, 0.1]} rotation={[0, Math.PI / 2, 0]} />
+          <Furniture name="kitchenCabinetDrawer" position={[1.15, 0, 0]} />
+          <Furniture name="kitchenSink" position={[2.2, 0, 0]} />
+          <Furniture name="kitchenCabinet" position={[3.25, 0, 0]} />
+          <Furniture name="kitchenMicrowave" position={[3.25, 0.95, 0]} scale={0.9} />
+          <Furniture name="kitchenCoffeeMachine" position={[1.15, 0.95, 0]} />
+          <Furniture name="kitchenCabinetUpper" position={[2.2, 1.7, -0.3]} />
+          <Furniture name="trashcan" position={[4.2, 0, 0]} />
+          <Label text="kitchen" position={[2.2, 2.4, 0]} />
         </group>
         {/* water cooler by the kitchen */}
-        <group position={[-hw + 4.4, 0, -hd + 0.6]} scale={0.85}>
+        <group position={[-hw + 4.9, 0, -hd + 0.6]} scale={0.85}>
           <mesh position={[0, 0.5, 0]}>
             <boxGeometry args={[0.36, 1.0, 0.36]} />
             <meshStandardMaterial color="#e6e8ec" />
@@ -130,34 +128,13 @@ export function Room({ agentCount }: { agentCount: number }) {
         </group>
 
         {/* left wall: bookcase and a plant */}
-        <Furniture name="bookcaseClosedWide" position={[-hw + 0.22, 0, -hd + d * 0.55]} rotation={[0, Math.PI / 2, 0]} />
+        <Furniture name="bookcaseClosedWide" position={[-hw + 0.45, 0, -hd + d * 0.55]} rotation={[0, Math.PI / 2, 0]} />
         <Furniture name="pottedPlant" position={[-hw + 0.7, 0, -hd + d * 0.72]} />
 
-        {/* meeting table on the right side (back half) */}
-        <group position={[sideX - 0.2, 0, -hd + d * 0.42]}>
-          <Furniture name="rugRectangle" position={[-1.1, 0, 0.9]} scale={1.1} />
-          <Furniture name="tableRound" position={[0, 0, 0]} scale={1.15} />
-          {([[-1.05, 0], [1.05, 0], [0, -1.05], [0, 1.05]] as [number, number][]).map(([ox, oz], i) => (
-            // chair model faces -z; turn it towards the table
-            <Furniture key={i} name="chair" position={[ox, 0, oz]} rotation={[0, Math.atan2(-ox, -oz) + Math.PI, 0]} scale={0.85} />
-          ))}
-          <Furniture name="books" position={[0.1, 0.78, 0.1]} scale={0.7} />
-          <Label text="meeting" position={[0, 1.5, 0]} />
-        </group>
 
-        {/* lounge on the right side (front half): sofa, coffee table, tv */}
-        <group position={[sideX - 0.3, 0, hd - 2.6]} scale={0.85}>
-          <Furniture name="rugRectangle" position={[-0.9, 0, 0.7]} />
-          <Furniture name="loungeSofa" position={[1.1, 0, -0.6]} rotation={[0, -Math.PI / 2, 0]} />
-          <Furniture name="tableCoffee" position={[-0.1, 0, 0.2]} rotation={[0, Math.PI / 2, 0]} />
-          <Furniture name="cabinetTelevision" position={[-1.9, 0, 0.2]} rotation={[0, Math.PI / 2, 0]} />
-          <Furniture name="televisionModern" position={[-1.75, 0.55, 0.2]} rotation={[0, Math.PI / 2, 0]} scale={0.7} />
-          <Furniture name="plantSmall1" position={[1.3, 0, 1.4]} />
-        </group>
-
-        {/* desk islands */}
-        {islands.map((p, i) => (
-          <Island key={i} position={p} />
+        {/* a plant at the aisle end of each row */}
+        {ends.map((p, i) => (
+          <Furniture key={i} name={i % 2 ? "plantSmall2" : "pottedPlant"} position={p} scale={i % 2 ? 1 : 0.8} />
         ))}
       </Suspense>
     </group>

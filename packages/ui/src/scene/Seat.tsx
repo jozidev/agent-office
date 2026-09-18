@@ -19,9 +19,8 @@ interface Props {
 export const deskScreenPositions = new Map<string, { x: number; y: number }>();
 
 /**
- * One workstation at the edge of a desk island: chair, character, monitor and
- * keyboard on the island top, name on the floor, glow when busy. The island
- * block itself is drawn by <Island>.
+ * One workstation: desk, chair, character, monitor(s), keyboard, mug, name on
+ * the floor, glow when busy. Coders get a second monitor.
  */
 export function Seat({ agent, state, position, yaw }: Props) {
   const hovered = useOffice((s) => s.hoveredAgentId === agent.id);
@@ -61,15 +60,22 @@ export function Seat({ agent, state, position, yaw }: Props) {
       }}
     >
       {/* pick target */}
-      <mesh position={[0, 0.7, 0.3]} visible={false}>
-        <boxGeometry args={[1.3, 1.6, 1.6]} />
+      <mesh position={[0, 0.7, 0.4]} visible={false}>
+        <boxGeometry args={[1.6, 1.6, 2.2]} />
       </mesh>
 
       <Suspense fallback={null}>
-        {/* local +z points at the island: monitor + keyboard sit on the island edge */}
-        <Furniture name="computerScreen" position={[-0.28, 0.8, 0.95]} scale={0.7} />
-        <Furniture name="computerKeyboard" position={[-0.24, 0.8, 0.62]} scale={0.8} />
-        <Furniture name="chairDesk" position={[-0.15, 0, -0.05]} />
+        {/* local +z is the facing direction: desk in front, monitor and keyboard on it */}
+        <Furniture name="desk" position={[0, 0, 0.85]} />
+        <Furniture name="computerScreen" position={[-0.15, 0.8, 0.95]} scale={0.7} />
+        {agent.role === "coder" && <Furniture name="computerScreen" position={[0.45, 0.8, 0.9]} scale={0.6} rotation={[0, -0.35, 0]} />}
+        <Furniture name="computerKeyboard" position={[-0.1, 0.8, 0.6]} scale={0.8} />
+        <Furniture name="chairDesk" position={[0, 0, -0.1]} />
+        {/* mug */}
+        <mesh position={[0.6, 0.86, 0.6]}>
+          <cylinderGeometry args={[0.055, 0.05, 0.11, 10]} />
+          <meshStandardMaterial color={agent.color} />
+        </mesh>
         <Character agent={agent} state={state} hovered={hovered || selected} />
       </Suspense>
 
@@ -89,7 +95,7 @@ export function Seat({ agent, state, position, yaw }: Props) {
         </div>
       </Html>
 
-      {busy && <pointLight position={[-0.2, 1.1, 0.7]} intensity={0.7} distance={1.6} color="#5aa9ff" />}
+      {busy && <pointLight position={[-0.2, 1.1, 0.6]} intensity={0.7} distance={1.6} color="#5aa9ff" />}
 
       {dragging && (
         <mesh position={[0, 0.03, 0.2]} rotation={[-Math.PI / 2, 0, 0]}>
