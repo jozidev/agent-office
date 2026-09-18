@@ -1,0 +1,24 @@
+{
+  "name": "agent-office",
+  "version": "0.1.0",
+  "description": "Manage Claude Code agents as characters in an isometric office",
+  "type": "module",
+  "bin": {
+    "agent-office": "./dist/index.js"
+  },
+  "files": ["dist", "ui"],
+  "scripts": {
+    "build": "tsup && rm -rf ui && cp -r ../../packages/ui/dist ui",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'no cli tests yet'"
+  },
+  "dependencies": {
+    "@agent-office/server": "workspace:*",
+    "@agent-office/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "agent-office",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Manage Claude Code agents as characters in an isometric office",
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./packages/server --filter ./packages/ui dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "start": "node apps/cli/dist/index.js"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0",
+    "typescript": "^5.6.0"
+  }
+}
