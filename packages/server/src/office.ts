@@ -344,6 +344,11 @@ export class Office {
   ingestExternal(agentId: string, e: RunnerEvent) {
     const state = this.states.get(agentId);
     if (!state) return;
+    // Hooks live in the agent's folder, so they also fire for the office's own
+    // headless ticket runs — every tool call arrived twice, once from the
+    // runner's stream and once from PreToolUse. While a session we started is
+    // running, that session is the authority.
+    if (this.sessions.has(agentId)) return;
     switch (e.kind) {
       case "started":
         if (!state.ticketId) state.sessionId = e.sessionId;
@@ -446,6 +451,7 @@ export class Office {
   forceIdle(agentId: string) {
     const state = this.states.get(agentId);
     if (!state) return;
+    if (this.sessions.has(agentId)) return; // our own ticket run ending; onEvent already handles it
     if (!state.ticketId) {
       state.status = "idle";
       this.pushLog(state, "session ended");

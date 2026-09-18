@@ -26,7 +26,12 @@ export function OfficeScene() {
   const { w, d } = roomSize(list.length);
 
   return (
-    <Canvas shadows dpr={[1, 2]} onPointerMissed={() => setSelected(null)} className="canvas">
+    // resize.debounce 0: with a debounce, react-three-fiber can miss its first
+    // container measurement and leave the canvas at the HTML default 300x150 —
+    // an empty office then paints nothing at all, because no store update ever
+    // arrives to force the re-render that would measure it again. Only shows up
+    // in a production build; StrictMode's double render hides it in dev.
+    <Canvas shadows dpr={[1, 2]} resize={{ debounce: 0, scroll: false }} onPointerMissed={() => setSelected(null)} className="canvas">
       <FitCamera w={w} d={d} />
       <ambientLight intensity={0.85} />
       <directionalLight position={[6, 12, 4]} intensity={1.7} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-14} shadow-camera-right={14} shadow-camera-top={14} shadow-camera-bottom={-14} />

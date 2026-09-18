@@ -24,6 +24,8 @@ Machine: macOS (darwin 25.5.0, arm64), Node v25.6.0, pnpm 10.28.0, `claude` 2.1.
 | 2 | Demo seed ran real sessions in folders that don't exist | high | fixed |
 | 3 | Hiring into a non-existent folder silently created it | medium | fixed |
 | 4 | node-pty's spawn-helper installs without its executable bit, so no terminal ever opened | high | fixed |
+| 5 | Every tool call was logged twice during a ticket run | medium | fixed |
+| 6 | An empty office rendered as a black void in production builds | medium | fixed |
 
 ### 1. A failed spawn took the server down
 
@@ -75,6 +77,30 @@ Fixed with `scripts/fix-pty-permissions.mjs`, run on postinstall from both the
 workspace root and the published CLI package (npx installs node-pty fresh, so
 it needs the same repair). The terminal route now also reports a spawn failure
 into the terminal instead of closing the socket with no explanation.
+
+### 5. Every tool call logged twice
+
+`docs/architecture.md` describes `ingestExternal` as the path "for sessions the
+office didn't start itself". It isn't: hooks are installed in the agent's
+*folder*, so they fire for the office's own headless `claude -p` ticket runs as
+well. Every tool call arrived twice — once from the runner's NDJSON stream,
+once from PreToolUse — and the event log showed each Write and Bash twice.
+
+`ingestExternal` and `forceIdle` now ignore events for an agent whose ticket
+session is still running: while the office started the session, that session's
+own stream is the authority.
+
+### 6. An empty office was a black void
+
+A fresh `npx agent-office` (no agents yet) showed nothing but the HUD. The
+canvas sat at the HTML default 300x150 while every container around it measured
+1271x986: react-three-fiber missed its first measurement of the container and
+nothing ever forced a re-measure, because with no agents no store update
+arrives. Hiring someone, or any window resize, fixed it instantly.
+
+Only reproducible in a production build — StrictMode's double render hides it
+in `pnpm dev`, which is why it survived four milestones. `<Canvas>` now passes
+`resize={{ debounce: 0, scroll: false }}`.
 
 ## Verified working end to end
 

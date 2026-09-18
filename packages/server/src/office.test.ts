@@ -123,6 +123,23 @@ describe("Office.ingestExternal (hook-driven, no ticket)", () => {
     expect(subs[0]!.id).toBe("sub2");
   });
 
+  it("ignores hook events for the office's own ticket run, so tools are not logged twice", () => {
+    const { office, runner } = setup();
+    const a = office.hire({ name: "A", role: "coder", cwd: "/x" });
+    const t = office.createTicket("do thing");
+    office.assign(t.id, a.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+
+    // The runner's stream and the folder's PreToolUse hook both describe the
+    // same Write: the hooks are installed in the agent's folder, so they fire
+    // for headless ticket runs too, not just interactive terminal sessions.
+    runner.emit({ kind: "tool_use", name: "Write", summary: "hello.txt" });
+    office.ingestExternal(a.id, { kind: "tool_use", name: "Write", summary: "hello.txt" });
+
+    const log = office.snapshot().states[0]!.log;
+    expect(log.filter((l) => l.includes("Write hello.txt"))).toHaveLength(1);
+  });
+
   it("a Stop hook does not settle to idle or touch the ticket while a ticket is actively running", () => {
     const { office, runner } = setup();
     const a = office.hire({ name: "A", role: "coder", cwd: "/x" });
