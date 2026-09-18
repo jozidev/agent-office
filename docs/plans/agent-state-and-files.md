@@ -75,6 +75,37 @@ tokens and stopping there, or removing path linking entirely and adding only
 the browser. Johan had not answered when the session ended — he had a question
 about the options that was never asked. **Ask before building.**
 
+## Design thought worth picking up (Johan, end of session)
+
+Raised as "just a thought" while heading out, but it reframes the open decision
+above, so read it first.
+
+**The panel is a 380px column doing six jobs** — identity, config, the ask, a
+terminal, a log, and a fire button. Nothing in it can be good at that width.
+The isometric office is the ambient view; selecting an agent probably wants a
+proper workspace pane or a full-width sheet, with the log, the terminal and the
+changes as siblings rather than stacked in a sidebar.
+
+**The missing content is file diffs.** The log says `Write /path/file.ts` and
+stops there — you can see that an agent touched something, never what it did.
+Every agent works in a git repo, so `git diff` in its working folder is exactly
+"what has this agent changed", and it is far more useful than a list of tool
+names. Nothing in the office surfaces it today.
+
+This is also where the VS Code question lands. Johan asked whether VS Code can
+run in a browser; it can, three ways (Monaco the embeddable component,
+`code serve-web`, or code-server). But the part worth importing is **Monaco's
+diff editor** — side-by-side, syntax-highlighted, collapsible — not Monaco as a
+file viewer. A unified `git diff` with +/- colouring is perhaps fifty lines and
+no bundle cost, so that is the honest first version; Monaco earns its few MB
+only once the simple one proves the feature is wanted. Note the UI bundle is
+already 1.6 MB with a Vite size warning, so Monaco would need lazy loading.
+
+**How this changes the open decision:** a Changes view may matter more than a
+file browser. "What did my agent just do" is a different and probably more
+common question than "let me go find a file". Worth settling the panel's shape
+before building either.
+
 ## Known loose ends
 
 | # | Thing | Notes |
