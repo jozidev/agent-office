@@ -8,7 +8,17 @@ import { preloadModels } from "./models";
 
 preloadModels();
 
-/** Fit the room into the viewport: the iso footprint is roughly (w+d) wide and (w+d)/2 tall. */
+/**
+ * Fit the room into the viewport: the iso footprint is roughly (w+d) wide and
+ * (w+d)/2 tall.
+ *
+ * The zoom is driven straight from the measured size. Easing it in the render
+ * loop was tried and reverted: it left the room cropped, because the camera
+ * has to be framed by the size react-three-fiber actually measured and any
+ * value in transit is the wrong one for the current canvas. The jerk it was
+ * meant to fix came from animating the container's width, which resized the
+ * canvas every frame — that is gone instead, so the canvas resizes once.
+ */
 function FitCamera({ w, d }: { w: number; d: number }) {
   const { size } = useThree();
   // camera on the (1,1,1) diagonal: screen width = (w+d)/√2, screen height = (w+d)/√2·sin(35.26°) + wall height·cos(35.26°)

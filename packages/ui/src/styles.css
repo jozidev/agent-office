@@ -36,7 +36,9 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
 /* Opening a pane gives the office the rest of the width rather than sliding
    over it, so FitCamera refits the whole room smaller instead of the pane
    covering half of it. */
-.canvas-host { position: absolute; inset: 0; transition: left .15s ease, right .15s ease; }
+/* No width transition: the camera eases instead, so the canvas resizes once
+   rather than on every frame. */
+.canvas-host { position: absolute; inset: 0; }
 .canvas--with-pane { left: 0; right: 60%; }
 .canvas--with-board { left: 60%; right: 0; }
 
