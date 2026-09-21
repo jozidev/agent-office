@@ -6,6 +6,8 @@ import { Changes } from "./Changes";
 import { FolderPicker } from "./FolderPicker";
 import { withFileLinks } from "./FilePath";
 import { elapsed } from "./metrics";
+import { SettingsSheet } from "./SettingsSheet";
+import { FolderPath } from "./FolderPath";
 import { SteerBar } from "./SteerBar";
 import { TerminalPanel } from "./Terminal";
 import { ChatPanel } from "./Chat";
@@ -24,12 +26,12 @@ export function AgentPanel() {
   const id = useOffice((s) => s.selectedAgentId);
   const agent = useOffice((s) => (id ? s.agents[id] : undefined));
   const state = useOffice((s) => (id ? s.states[id] : undefined));
-  const ticket = useOffice((s) => (state?.ticketId ? s.tickets[state.ticketId] : undefined));
   const send = useOffice((s) => s.send);
   const setSelected = useOffice((s) => s.setSelected);
   const [tab, setTab] = useState<TabId | null>(null);
   const [browsing, setBrowsing] = useState(false);
   const replyRef = useRef<HTMLTextAreaElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const busy = state ? state.status === "thinking" || state.status === "tool_use" : false;
   const touched = state?.touchedFiles.length ?? 0;
@@ -65,43 +67,34 @@ export function AgentPanel() {
     <aside className="workspace">
       <header>
         <i style={{ width: 10, height: 10, borderRadius: "50%", background: statusColor[state.status] }} />
-        <h3>
-          {agent.name} <small>· {preset.label}</small>
-        </h3>
-        {/* What the agent is configured as, always; what it is costing, only
-            while it is actually running. */}
-        <dl className="workspace-meta">
-          <div>
-            <dt>model</dt>
-            <dd>{CLAUDE_MODELS.find((m) => m.id === agent.model)?.label ?? agent.model}</dd>
-          </div>
-          <div>
-            <dt>permissions</dt>
-            <dd>{PERMISSION_MODES.find((p) => p.id === agent.permissionMode)?.label ?? agent.permissionMode}</dd>
-          </div>
-          <div className="workspace-meta-folder">
-            <dt>folder</dt>
-            <dd title={agent.cwd}>{agent.cwd}</dd>
-          </div>
-          {busy && (
-            <>
-              <div>
-                <dt>elapsed</dt>
-                <dd>{elapsed(state.metrics.startedAt)}</dd>
-              </div>
-              <div>
-                <dt>cost</dt>
-                <dd>${state.metrics.costUsd.toFixed(2)}</dd>
-              </div>
-              <div>
-                <dt>context</dt>
-                <dd>{state.metrics.contextPct === null ? "-" : `${Math.round(state.metrics.contextPct * 100)}%`}</dd>
-              </div>
-            </>
-          )}
-        </dl>
+        <b className="workspace-name">{agent.name}</b>
+        <span className="workspace-role">{preset.label}</span>
+
         <span className="workspace-status">{statusLabel[state.status]}</span>
-        <button onClick={() => setSelected(null)}>×</button>
+        {/* What it is costing while it runs; what it is set to when it does not. */}
+        {busy ? (
+          <span className="workspace-facts">
+            {elapsed(state.metrics.startedAt)} · ${state.metrics.costUsd.toFixed(2)} ·{" "}
+            {state.metrics.contextPct === null ? "–" : `${Math.round(state.metrics.contextPct * 100)}%`}
+          </span>
+        ) : (
+          <span className="workspace-facts">
+            {CLAUDE_MODELS.find((m) => m.id === agent.model)?.label ?? agent.model} ·{" "}
+            {PERMISSION_MODES.find((p) => p.id === agent.permissionMode)?.label ?? agent.permissionMode}
+          </span>
+        )}
+        {/* An SVG rather than the ⚙ glyph, which renders thin and tiny on macOS. */}
+        <button className="icon" title="Settings" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3.2" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+        <button className="icon" title="Close" aria-label="Close" onClick={() => setSelected(null)}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
       </header>
 
       {waiting && (
@@ -124,30 +117,6 @@ export function AgentPanel() {
             {t.badge ? <i className="tab-badge">{t.badge}</i> : null}
           </button>
         ))}
-        <div className="workspace-tabs-right">
-          <details className="kv-pop">
-            <summary>details</summary>
-            <div className="kv-pop-card">
-              <div className="kv">
-                <span>runtime</span>
-                <b>{agent.runtime}</b>
-                <span>folder</span>
-                <b className="ellipsis" title={agent.cwd}>{agent.cwd}</b>
-                <span>tools</span>
-                <b>{agent.allowedTools.length ? agent.allowedTools.join(", ") : "none"}</b>
-                <span>ticket</span>
-                <b>{ticket ? ticket.title : "none"}</b>
-                <span>session</span>
-                <b className="ellipsis" title={state.sessionId ?? ""}>{state.sessionId ?? "-"}</b>
-              </div>
-              <div className="kv-pop-foot">
-                <button className="danger" onClick={() => send({ type: "agent.fire", agentId: agent.id })}>
-                  Fire {agent.name}
-                </button>
-              </div>
-            </div>
-          </details>
-        </div>
       </nav>
 
       <div className="workspace-body">
@@ -159,7 +128,9 @@ export function AgentPanel() {
         {active === "changes" && <Changes agentId={agent.id} touchedCount={touched} />}
         {active === "files" && (
           <div className="workspace-files">
-            <button onClick={() => setBrowsing(true)}>Browse {agent.cwd}</button>
+            <button onClick={() => setBrowsing(true)}>
+              Browse <FolderPath path={agent.cwd} />
+            </button>
             {browsing && <FolderPicker start={agent.cwd} onClose={() => setBrowsing(false)} onPick={() => setBrowsing(false)} />}
           </div>
         )}
@@ -170,6 +141,19 @@ export function AgentPanel() {
             <TerminalPanel key={agent.id} agentId={agent.id} agentName={agent.name} />
           ))}
       </div>
+
+      {settingsOpen && (
+        <SettingsSheet
+          agent={agent}
+          onModel={(model) => send({ type: "agent.update", agentId: agent.id, model })}
+          onPermissionMode={(permissionMode) => send({ type: "agent.update", agentId: agent.id, permissionMode })}
+          onFire={() => {
+            send({ type: "agent.fire", agentId: agent.id });
+            setSettingsOpen(false);
+          }}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
 
       <SteerBar
         ref={replyRef}
