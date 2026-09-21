@@ -486,6 +486,9 @@ export class Office {
           state.sessionId = e.sessionId;
           this.store.saveAgentSession(agentId, e.sessionId);
         }
+        // Nothing reports usage for a session we did not start, so without
+        // this the header shows an agent working for "–".
+        state.metrics.startedAt ??= now();
         // Opening a terminal to read the question must not answer it.
         if (state.status !== "waiting") state.status = "thinking";
         break;
@@ -577,8 +580,24 @@ export class Office {
         pct = (input + output) / size;
       }
     }
-    if (pct === null || Number.isNaN(pct)) return;
-    state.metrics.contextPct = Math.max(0, Math.min(1, pct));
+    // Claude Code's statusline also reports what the session has spent, which
+    // is the only source of that for a take-over: no NDJSON stream to read.
+    const cost = (b["cost"] ?? {}) as Record<string, unknown>;
+    let changed = false;
+    if (typeof cost["total_cost_usd"] === "number") {
+      state.metrics.costUsd = cost["total_cost_usd"];
+      changed = true;
+    }
+    if (typeof cost["total_duration_ms"] === "number" && cost["total_duration_ms"] > 0) {
+      state.metrics.startedAt = new Date(Date.now() - cost["total_duration_ms"]).toISOString();
+      changed = true;
+    }
+
+    if (pct !== null && !Number.isNaN(pct)) {
+      state.metrics.contextPct = Math.max(0, Math.min(1, pct));
+      changed = true;
+    }
+    if (!changed) return;
     this.broadcast({ type: "state.update", state });
   }
 

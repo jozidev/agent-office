@@ -37,6 +37,9 @@ export function AgentPanel() {
   const busy = state ? state.status === "thinking" || state.status === "tool_use" : false;
   const touched = state?.touchedFiles.length ?? 0;
 
+  // Only the facts we actually have. A take-over reports nothing until its
+  // statusline fires, and "– · $0.00 · –" reads as a broken widget rather than
+  // as "not known yet".
   // Elapsed has to tick on its own; nothing else in the store changes per second.
   const [, tick] = useState(0);
   useEffect(() => {
@@ -53,6 +56,15 @@ export function AgentPanel() {
 
   if (!agent || !state) return null;
   const preset = ROLE_PRESETS[agent.role];
+  const m = state.metrics;
+  const running = [
+    ...(m.startedAt ? [elapsed(m.startedAt)] : []),
+    ...(m.costUsd > 0 ? [`$${m.costUsd.toFixed(2)}`] : []),
+    ...(m.contextPct !== null ? [`${Math.round(m.contextPct * 100)}%`] : []),
+  ];
+  const settings = `${CLAUDE_MODELS.find((x) => x.id === agent.model)?.label ?? agent.model} · ${
+    PERMISSION_MODES.find((p) => p.id === agent.permissionMode)?.label ?? agent.permissionMode
+  }`;
   const question = state.question ?? (state.status === "waiting" ? (state.log[state.log.length - 1]?.replace(/^\S+\s(asks:\s)?/, "") ?? "") : "");
   const waiting = Boolean(question);
 
@@ -73,17 +85,7 @@ export function AgentPanel() {
 
         <span className="workspace-status">{statusLabel[state.status]}</span>
         {/* What it is costing while it runs; what it is set to when it does not. */}
-        {busy ? (
-          <span className="workspace-facts">
-            {elapsed(state.metrics.startedAt)} · ${state.metrics.costUsd.toFixed(2)} ·{" "}
-            {state.metrics.contextPct === null ? "–" : `${Math.round(state.metrics.contextPct * 100)}%`}
-          </span>
-        ) : (
-          <span className="workspace-facts">
-            {CLAUDE_MODELS.find((m) => m.id === agent.model)?.label ?? agent.model} ·{" "}
-            {PERMISSION_MODES.find((p) => p.id === agent.permissionMode)?.label ?? agent.permissionMode}
-          </span>
-        )}
+        <span className="workspace-facts">{busy && running.length ? running.join(" · ") : settings}</span>
         {/* An SVG rather than the ⚙ glyph, which renders thin and tiny on macOS. */}
         <button className="icon" title="Settings" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

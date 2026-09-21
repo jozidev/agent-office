@@ -403,3 +403,60 @@ describe("touched files", () => {
     expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.touchedFiles).toEqual(["/x/a.ts"]);
   });
 });
+
+/**
+ * A take-over has no NDJSON stream, so nothing reports how long it has been
+ * running or what it has spent. The header showed "– · $0.00 · –", which
+ * reads as broken rather than as "not known yet".
+ */
+describe("metrics for a session the office did not start", () => {
+  it("starts the clock when a terminal session begins", () => {
+    const { office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.metrics.startedAt).toBeNull();
+
+    office.ingestExternal(agent.id, { kind: "started", sessionId: "term-1" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.metrics.startedAt).not.toBeNull();
+  });
+
+  it("does not move a clock a ticket run already started", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("t", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    const first = office.snapshot().states.find((s) => s.agentId === agent.id)?.metrics.startedAt;
+    office.ingestExternal(agent.id, { kind: "started", sessionId: "s1" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.metrics.startedAt).toBe(first);
+  });
+
+  it("takes cost and elapsed from the statusline, which is the only source", () => {
+    const { office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    office.ingestStatusline(agent.id, {
+      cost: { total_cost_usd: 0.42, total_duration_ms: 65_000 },
+      context_window: { used_percentage: 12 },
+    });
+    const m = office.snapshot().states.find((s) => s.agentId === agent.id)?.metrics;
+    expect(m?.costUsd).toBe(0.42);
+    expect(m?.contextPct).toBeCloseTo(0.12, 3);
+    expect(Date.now() - new Date(m!.startedAt!).getTime()).toBeGreaterThanOrEqual(64_000);
+  });
+
+  it("ignores a statusline that carries none of it", () => {
+    const { office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    office.ingestStatusline(agent.id, { model: { display_name: "Opus 5" } });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.metrics.costUsd).toBe(0);
+  });
+
+  it("leaves a running ticket's own numbers alone", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("t", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "usage", input: 1, output: 2, cacheRead: 3, costUsd: 9.99 });
+    office.ingestStatusline(agent.id, { cost: { total_cost_usd: 0.01 } });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.metrics.costUsd).toBe(9.99);
+  });
+});
