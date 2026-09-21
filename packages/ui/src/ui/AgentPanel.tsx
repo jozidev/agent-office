@@ -37,6 +37,8 @@ export function AgentPanel() {
           <div className="kv">
           <span>status</span>
           <b>{statusLabel[state.status]}</b>
+          <span>runtime</span>
+          <b>{agent.runtime}</b>
           <span>model</span>
           <select
             className="kv-edit"

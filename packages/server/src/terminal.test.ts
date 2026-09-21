@@ -91,7 +91,7 @@ describe("sizeFromQuery", () => {
 });
 
 describe("claudeArgsFor", () => {
-  const base = { id: "a", name: "Ada", role: "coder", color: "#fff", cwd: "/tmp", systemPrompt: "", allowedTools: [], uiMode: "terminal", desk: 0, createdAt: "" };
+  const base = { id: "a", name: "Ada", role: "coder", color: "#fff", runtime: "claude", cwd: "/tmp", systemPrompt: "", allowedTools: [], uiMode: "terminal", desk: 0, createdAt: "" };
 
   it("resumes with the agent's model and permission mode", () => {
     const agent = { ...base, model: "claude-opus-5", permissionMode: "acceptEdits" } as Agent;

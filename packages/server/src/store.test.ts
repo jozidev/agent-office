@@ -1,4 +1,5 @@
 import { mkdtempSync, existsSync } from "node:fs";
+import Database from "better-sqlite3";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -25,6 +26,7 @@ const agent = (over: Partial<Agent> = {}): Agent =>
     name: "Nyx",
     role: "coder",
     color: "#4aa3df",
+    runtime: "claude",
     model: "sonnet",
     cwd: "~/code/thing",
     systemPrompt: "be brief",
@@ -218,5 +220,48 @@ describe("settings", () => {
     const mem = new MemoryStore();
     mem.setSetting(SETTINGS.terminalApp, "iterm");
     expect(mem.getSetting(SETTINGS.terminalApp)).toBeNull();
+  });
+});
+
+describe("runtime", () => {
+  it("round-trips through the database", () => {
+    store.saveAgent(agent());
+    expect(store.loadAgents()[0]?.runtime).toBe("claude");
+  });
+
+  /**
+   * CREATE TABLE IF NOT EXISTS leaves an existing table alone, so a database
+   * written before the column existed has to have it added and backfilled —
+   * otherwise every restored agent comes back with runtime undefined.
+   */
+  it("backfills a database written before the column existed", () => {
+    store.close();
+    const path = join(dir, "legacy.db");
+    const legacy = new Database(path);
+    legacy.exec(`
+      CREATE TABLE agents (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, color TEXT NOT NULL,
+        model TEXT, cwd TEXT NOT NULL, systemPrompt TEXT NOT NULL DEFAULT '',
+        allowedTools TEXT NOT NULL DEFAULT '[]', permissionMode TEXT NOT NULL,
+        uiMode TEXT NOT NULL, desk INTEGER NOT NULL, createdAt TEXT NOT NULL, lastSessionId TEXT
+      );
+      INSERT INTO agents (id, name, role, color, model, cwd, permissionMode, uiMode, desk, createdAt)
+      VALUES ('old1', 'Ada', 'coder', '#fff', 'claude-opus-5', '/tmp', 'manual', 'terminal', 0, '2026-01-01');
+    `);
+    legacy.close();
+
+    const reopened = new SqliteStore(path);
+    const restored = reopened.loadAgents();
+    expect(restored).toHaveLength(1);
+    expect(restored[0]?.runtime).toBe("claude");
+    expect(restored[0]?.name).toBe("Ada");
+
+    // And the migration is idempotent — opening it again must not fail.
+    reopened.close();
+    const again = new SqliteStore(path);
+    expect(again.loadAgents()[0]?.runtime).toBe("claude");
+    again.close();
+
+    store = new SqliteStore(join(dir, "office.db"));
   });
 });

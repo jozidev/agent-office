@@ -50,11 +50,22 @@ export function legacyPermissionMode(value: string): PermissionMode {
 
 // ---------- Entities ----------
 
+/**
+ * Which agent runtime backs this agent. One value today; it exists so the
+ * office can grow a second without a migration, and so the panel can say what
+ * it is actually driving rather than leaving you to infer it.
+ */
+export const Runtime = z.enum(["claude"]);
+export type Runtime = z.infer<typeof Runtime>;
+
+export const DEFAULT_RUNTIME: Runtime = "claude";
+
 export const Agent = z.object({
   id: z.string(),
   name: z.string().min(1).max(40),
   role: RoleId,
   color: z.string(), // hex
+  runtime: Runtime.default(DEFAULT_RUNTIME),
   model: z.string(),
   cwd: z.string(),
   systemPrompt: z.string().default(""),

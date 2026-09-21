@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import Database from "better-sqlite3";
-import { legacyPermissionMode } from "@agent-office/shared";
+import { DEFAULT_RUNTIME, Runtime, legacyPermissionMode } from "@agent-office/shared";
 import type { Agent, Ticket, TicketStatus } from "@agent-office/shared";
 
 /**
@@ -66,6 +66,7 @@ interface AgentRow {
   name: string;
   role: string;
   color: string;
+  runtime: string | null;
   model: string | null;
   cwd: string;
   systemPrompt: string;
@@ -111,6 +112,7 @@ export class SqliteStore implements Store {
         name TEXT NOT NULL,
         role TEXT NOT NULL,
         color TEXT NOT NULL,
+        runtime TEXT NOT NULL DEFAULT 'claude',
         model TEXT,
         cwd TEXT NOT NULL,
         systemPrompt TEXT NOT NULL DEFAULT '',
@@ -136,6 +138,19 @@ export class SqliteStore implements Store {
         value TEXT NOT NULL
       );
     `);
+    this.migrate();
+  }
+
+  /**
+   * CREATE TABLE IF NOT EXISTS does nothing to a table that already exists, so
+   * a database from before a column was added needs it put there explicitly.
+   * The DEFAULT backfills every existing row in the same statement.
+   */
+  private migrate(): void {
+    const columns = this.db.prepare("PRAGMA table_info(agents)").all() as { name: string }[];
+    if (!columns.some((c) => c.name === "runtime")) {
+      this.db.exec(`ALTER TABLE agents ADD COLUMN runtime TEXT NOT NULL DEFAULT '${DEFAULT_RUNTIME}'`);
+    }
   }
 
   loadAgents(): Agent[] {
@@ -145,6 +160,9 @@ export class SqliteStore implements Store {
       name: r.name,
       role: r.role,
       color: r.color,
+      // Rows written before runtime existed have it backfilled by the
+      // migration; an unrecognised value still resolves rather than throwing.
+      runtime: Runtime.safeParse(r.runtime).success ? (r.runtime as Runtime) : DEFAULT_RUNTIME,
       model: r.model,
       cwd: r.cwd,
       systemPrompt: r.systemPrompt,
@@ -186,10 +204,11 @@ export class SqliteStore implements Store {
   saveAgent(agent: Agent): void {
     this.db
       .prepare(
-        `INSERT INTO agents (id, name, role, color, model, cwd, systemPrompt, allowedTools, permissionMode, uiMode, desk, createdAt)
-         VALUES (@id, @name, @role, @color, @model, @cwd, @systemPrompt, @allowedTools, @permissionMode, @uiMode, @desk, @createdAt)
+        `INSERT INTO agents (id, name, role, color, runtime, model, cwd, systemPrompt, allowedTools, permissionMode, uiMode, desk, createdAt)
+         VALUES (@id, @name, @role, @color, @runtime, @model, @cwd, @systemPrompt, @allowedTools, @permissionMode, @uiMode, @desk, @createdAt)
          ON CONFLICT(id) DO UPDATE SET
-           name = excluded.name, role = excluded.role, color = excluded.color, model = excluded.model,
+           name = excluded.name, role = excluded.role, color = excluded.color,
+           runtime = excluded.runtime, model = excluded.model,
            cwd = excluded.cwd, systemPrompt = excluded.systemPrompt, allowedTools = excluded.allowedTools,
            permissionMode = excluded.permissionMode, uiMode = excluded.uiMode, desk = excluded.desk`,
       )
@@ -198,6 +217,7 @@ export class SqliteStore implements Store {
         name: agent.name,
         role: agent.role,
         color: agent.color,
+        runtime: agent.runtime ?? DEFAULT_RUNTIME,
         model: agent.model ?? null,
         cwd: agent.cwd,
         systemPrompt: agent.systemPrompt,

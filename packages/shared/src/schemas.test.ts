@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  Agent,
   CLAUDE_MODELS,
   ClientMessage,
   DEFAULT_MODEL,
   DEFAULT_PERMISSION_MODE,
+  DEFAULT_RUNTIME,
+  Runtime,
   PERMISSION_MODES,
   PermissionMode,
   ServerMessage,
@@ -74,5 +77,27 @@ describe("permission modes", () => {
     expect(ClientMessage.safeParse({ type: "agent.update", agentId: "a1", permissionMode: "auto" }).success).toBe(true);
     expect(ClientMessage.safeParse({ type: "agent.update", agentId: "a1", model: "claude-opus-5" }).success).toBe(true);
     expect(ClientMessage.safeParse({ type: "agent.update", agentId: "a1", permissionMode: "default" }).success).toBe(false);
+  });
+});
+
+describe("runtime", () => {
+  it("defaults to claude when a stored agent predates the field", () => {
+    const parsed = Agent.parse({
+      id: "a1",
+      name: "Ada",
+      role: "coder",
+      color: "#fff",
+      model: "claude-opus-5",
+      cwd: "/tmp",
+      uiMode: "terminal",
+      desk: 0,
+      createdAt: "2026-01-01",
+    });
+    expect(parsed.runtime).toBe(DEFAULT_RUNTIME);
+  });
+
+  it("rejects a runtime the office cannot drive", () => {
+    expect(Runtime.safeParse("claude").success).toBe(true);
+    expect(Runtime.safeParse("gpt").success).toBe(false);
   });
 });
