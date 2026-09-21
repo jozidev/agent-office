@@ -74,7 +74,7 @@ export function Tooltip() {
           ))}
         </div>
       )}
-      <div className="hint">click to open {agent.uiMode === "chat" ? "chat" : "terminal"}</div>
+      <div className="hint">click to open</div>
     </div>
   );
 }

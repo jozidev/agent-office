@@ -44,11 +44,12 @@ export function SettingsSheet({
             <select value={agent.model} onChange={(e) => onModel(e.target.value)}>
               {CLAUDE_MODELS.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.label} — {m.blurb}
+                  {m.label}
                 </option>
               ))}
               {!CLAUDE_MODELS.some((m) => m.id === agent.model) && <option value={agent.model}>{agent.model}</option>}
             </select>
+            <small>{CLAUDE_MODELS.find((m) => m.id === agent.model)?.blurb}</small>
           </label>
 
           <label>
@@ -56,10 +57,11 @@ export function SettingsSheet({
             <select value={agent.permissionMode} onChange={(e) => onPermissionMode(e.target.value as PermissionMode)}>
               {PERMISSION_MODES.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.label} — {p.blurb}
+                  {p.label}
                 </option>
               ))}
             </select>
+            <small>{PERMISSION_MODES.find((p) => p.id === agent.permissionMode)?.blurb}</small>
           </label>
           <p className="sheet-note">Both apply to the agent&rsquo;s next run, not the one in flight.</p>
 

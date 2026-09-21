@@ -27,7 +27,6 @@ export function Board() {
   const states = useOffice((s) => s.states);
   const send = useOffice((s) => s.send);
   const setDragging = useOffice((s) => s.setDragging);
-  const setBoardOpen = useOffice((s) => s.setBoardOpen);
   const [title, setTitle] = useState("");
   const [over, setOver] = useState<TicketStatus | null>(null);
 
@@ -48,7 +47,6 @@ export function Board() {
     <section className="board">
       <header>
         <h3>Board</h3>
-        <button onClick={() => setBoardOpen(false)}>×</button>
       </header>
       <div className="new">
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="New ticket title" onKeyDown={(e) => e.key === "Enter" && create()} />

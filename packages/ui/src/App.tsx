@@ -31,6 +31,11 @@ export function App() {
   const dragging = useOffice((s) => s.draggingTicketId);
   const toasts = useOffice((s) => s.toasts);
   const setSetupOpen = useOffice((s) => s.setSetupOpen);
+  const setSelected = useOffice((s) => s.setSelected);
+  const setBoardOpen = useOffice((s) => s.setBoardOpen);
+  const hireOpen = useOffice((s) => s.hireOpen);
+  const setHireOpen = useOffice((s) => s.setHireOpen);
+  const setupOpen = useOffice((s) => s.setupOpen);
   const selected = useOffice((s) => s.selectedAgentId);
   const boardOpen = useOffice((s) => s.boardOpen);
 
@@ -43,6 +48,20 @@ export function App() {
       })
       .catch(() => {});
   }, [setSetupOpen]);
+
+  // Escape closes the innermost thing that is open. Sheets and previews handle
+  // their own, and stop the event, so by the time it reaches here they are shut.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (setupOpen) setSetupOpen(false);
+      else if (hireOpen) setHireOpen(false);
+      else if (selected) setSelected(null);
+      else if (boardOpen) setBoardOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setupOpen, hireOpen, selected, boardOpen, setSetupOpen, setHireOpen, setSelected, setBoardOpen]);
 
   return (
     <div
