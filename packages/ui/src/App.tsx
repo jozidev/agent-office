@@ -11,7 +11,20 @@ import { useEffect } from "react";
 
 const DROP_RADIUS = 90;
 
-function nearestDesk(x: number, y: number): string | null {
+/**
+ * Desks are projected in the canvas's own coordinates, while a drag event
+ * reports the viewport's. Those were the same thing while the canvas filled
+ * the window; they stopped being the same when opening a pane or the board
+ * started offsetting it, and dropping on a desk silently missed by the width
+ * of whatever was open.
+ */
+function nearestDesk(clientX: number, clientY: number): string | null {
+  const canvas = document.querySelector(".canvas-host canvas");
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+
   let best: string | null = null;
   let bestD = DROP_RADIUS;
   for (const [id, p] of deskScreenPositions) {
