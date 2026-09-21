@@ -166,7 +166,8 @@ button.icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1p
 /* Steering lives at the foot of the pane, where a reply box belongs, and is
    always about the next turn rather than the one in flight. */
 .steer { border-top: 1px solid var(--line); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--panel-2); }
-.steer textarea { min-height: 46px; max-height: 140px; font-size: 12px; }
+.steer textarea { min-height: 46px; max-height: 140px; font-size: 13px; }
+.steer textarea:disabled { background: transparent; border-style: dashed; cursor: default; }
 .steer-controls { display: flex; align-items: center; gap: 14px; }
 .steer-controls label { display: flex; align-items: center; gap: 6px; margin: 0; }
 .steer-controls label > span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { CLAUDE_MODELS, PERMISSION_MODES, ROLE_PRESETS, type PermissionMode } from "@agent-office/shared";
 import { useOffice, statusColor, statusLabel } from "../store";
 import { AskCard } from "./AskCard";
@@ -31,7 +31,6 @@ export function AgentPanel() {
   const setSelected = useOffice((s) => s.setSelected);
   const [tab, setTab] = useState<TabId | null>(null);
   const [browsing, setBrowsing] = useState(false);
-  const replyRef = useRef<HTMLTextAreaElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const busy = state ? state.status === "thinking" || state.status === "tool_use" : false;
@@ -106,7 +105,6 @@ export function AgentPanel() {
             answerIn={state.answerIn}
             baseDir={agent.cwd}
             onSend={answer}
-            onReject={() => replyRef.current?.focus()}
           />
         </div>
       )}
@@ -157,12 +155,11 @@ export function AgentPanel() {
       )}
 
       <SteerBar
-        ref={replyRef}
         model={agent.model}
         permissionMode={agent.permissionMode}
         busy={busy}
         canStop={Boolean(state.ticketId)}
-        onSend={answer}
+        showTakeOver={active !== "terminal"}
         onModel={(model) => send({ type: "agent.update", agentId: agent.id, model })}
         onPermissionMode={(permissionMode) => send({ type: "agent.update", agentId: agent.id, permissionMode })}
         onStop={() => send({ type: "session.stop", agentId: agent.id })}

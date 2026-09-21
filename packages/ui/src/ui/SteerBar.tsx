@@ -1,51 +1,41 @@
-import { forwardRef, useState } from "react";
 import { CLAUDE_MODELS, PERMISSION_MODES, type PermissionMode } from "@agent-office/shared";
 
 /**
- * Everything you do *to* a running agent, in one place at the foot of the pane.
+ * What you do *to* a running agent, at the foot of the pane: what it runs as,
+ * and the two things you can do to it right now.
  *
- * Steering is always "next turn", never mid-run: a model or permission change
- * is a flag baked in when a session spawns, and a reply is delivered when the
- * agent next asks or is resumed. The labels say so, because a control that
- * looks like it interrupts and doesn't is worse than no control.
+ * Replying is not here. A reply only ever answers a question, so its box lives
+ * in the ask card with the question; a reply box that is present whether or
+ * not anything asked you is a control that does nothing most of the time.
+ *
+ * Steering is always "next turn", never mid-run: model and permission mode are
+ * flags baked in when a session spawns. The bar says so, because a control
+ * that looks like it interrupts and does not is worse than no control.
  */
-export const SteerBar = forwardRef<
-  HTMLTextAreaElement,
-  {
-    model: string;
-    permissionMode: PermissionMode;
-    busy: boolean;
-    canStop: boolean;
-    onSend: (text: string) => void;
-    onModel: (model: string) => void;
-    onPermissionMode: (mode: PermissionMode) => void;
-    onStop: () => void;
-    onTakeOver: () => void;
-  }
->(function SteerBar({ model, permissionMode, busy, canStop, onSend, onModel, onPermissionMode, onStop, onTakeOver }, ref) {
-  const [reply, setReply] = useState("");
-
-  const send = () => {
-    const t = reply.trim();
-    if (!t) return;
-    onSend(t);
-    setReply("");
-  };
-
+export function SteerBar({
+  model,
+  permissionMode,
+  busy,
+  canStop,
+  showTakeOver,
+  onModel,
+  onPermissionMode,
+  onStop,
+  onTakeOver,
+}: {
+  model: string;
+  permissionMode: PermissionMode;
+  busy: boolean;
+  canStop: boolean;
+  /** False on the Terminal tab, where you are already looking at the terminal. */
+  showTakeOver: boolean;
+  onModel: (model: string) => void;
+  onPermissionMode: (mode: PermissionMode) => void;
+  onStop: () => void;
+  onTakeOver: () => void;
+}) {
   return (
     <div className="steer">
-      <textarea
-        ref={ref}
-        value={reply}
-        placeholder={busy ? "reply — delivered on its next turn (Enter to send)" : "reply — Enter to send, Shift+Enter for a new line"}
-        onChange={(e) => setReply(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            send();
-          }
-        }}
-      />
       <div className="steer-controls">
         <label>
           <span>model</span>
@@ -75,12 +65,9 @@ export const SteerBar = forwardRef<
         {busy && <span className="steer-note">changes apply to the next run</span>}
         <div className="steer-right">
           {canStop && <button onClick={onStop}>Stop</button>}
-          <button onClick={onTakeOver}>Take over</button>
-          <button className="primary" disabled={!reply.trim()} onClick={send}>
-            Send
-          </button>
+          {showTakeOver && <button onClick={onTakeOver}>Take over</button>}
         </div>
       </div>
     </div>
   );
-});
+}

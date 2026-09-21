@@ -55,7 +55,6 @@ export function AskCard({
   answerIn,
   baseDir,
   onSend,
-  onReject,
 }: {
   agentName: string;
   question: string;
@@ -63,10 +62,17 @@ export function AskCard({
   /** The agent's working folder: what a relative path in its output means. */
   baseDir: string;
   onSend: (text: string) => void;
-  /** Focuses the steer bar's reply box, for when Reject needs a reason. */
-  onReject: () => void;
 }) {
   const terminalOwned = answerIn === "terminal";
+  const [reply, setReply] = useState("");
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+
+  const send = (text: string) => {
+    const t = text.trim();
+    if (!t) return;
+    onSend(t);
+    setReply("");
+  };
 
   if (terminalOwned) return <TerminalAsk agentName={agentName} question={question} baseDir={baseDir} />;
 
@@ -80,14 +86,30 @@ export function AskCard({
         <Markdown text={question} baseDir={baseDir} />
       </div>
       <div className="ask-reply">
+        {/* The box lives with the question it answers. Anywhere else it is a
+            control that does nothing most of the time. */}
+        <textarea
+          ref={boxRef}
+          value={reply}
+          placeholder="or answer in your own words — Enter to send, Shift+Enter for a new line"
+          onChange={(e) => setReply(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              send(reply);
+            }
+          }}
+        />
         <div className="ask-actions">
-          {/* Both go through the runner like any other reply; Reject moves you
-              to the reply box, because "no" is rarely the whole answer. */}
-          <button className="primary" onClick={() => onSend("Approved — go ahead.")}>
+          {/* Both go through the runner like any other reply; Reject puts the
+              cursor in the box, because "no" is rarely the whole answer. */}
+          <button className="primary" onClick={() => send("Approved — go ahead.")}>
             Approve
           </button>
-          <button onClick={onReject}>Reject</button>
-          <span className="ask-hint">or answer below</span>
+          <button onClick={() => boxRef.current?.focus()}>Reject</button>
+          <button className="primary" disabled={!reply.trim()} onClick={() => send(reply)}>
+            Send
+          </button>
         </div>
       </div>
     </section>
