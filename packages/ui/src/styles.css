@@ -65,10 +65,6 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
 .tooltip .subs { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 6px; color: var(--muted); }
 .tooltip .hint { margin-top: 8px; color: var(--muted); font-size: 11px; }
 
-.panel {
-  position: absolute; top: 44px; right: 0; bottom: 0; width: 380px; background: var(--panel-solid);
-  border-left: 1px solid var(--line); z-index: 10; display: flex; flex-direction: column; overflow: hidden;
-}
 
 /* The workspace pane: a diff needs width, so it takes most of the screen and
    leaves the office as a strip down the side. */
@@ -106,12 +102,16 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
   text-transform: uppercase; letter-spacing: .06em; padding: 8px 4px;
 }
 .kv-pop > summary::-webkit-details-marker { display: none; }
-.kv-pop[open] > div, .kv-pop[open] > button {
-  position: absolute; right: 0; top: 100%; z-index: 40; width: 380px;
+.kv-pop-card {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; width: 420px; max-width: 70vw;
   background: var(--panel-solid); border: 1px solid var(--line); border-radius: 8px;
-  box-shadow: 0 12px 32px rgba(0,0,0,.5); padding: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.5); padding: 12px 14px;
 }
-.kv-pop[open] > button { top: calc(100% + 1px); transform: translateY(100%); width: auto; box-shadow: none; }
+.kv-pop-card .kv { margin-bottom: 0; }
+.kv-pop-card .kv b { min-width: 0; overflow-wrap: anywhere; }
+/* Firing is destructive and easy to hit by accident, so it sits below a rule
+   rather than beside the values. */
+.kv-pop-foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
 
 .workspace-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; }
 
@@ -147,22 +147,19 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
 .changes-diff { flex: 1; min-width: 0; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .changes-note { padding: 14px; color: var(--muted); font-size: 12px; }
 .changes-note--inline { padding: 6px 8px; }
-.panel header { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
-.panel header h3 { margin: 0; flex: 1; }
-.panel .body { padding: 12px 14px; overflow: auto; flex: 1; }
-.panel .log { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 240px; overflow: auto; white-space: pre-wrap; color: var(--muted); font-size: 12px; }
-.panel .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-.panel .kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 8px; color: var(--muted); margin-bottom: 12px; }
-.panel .kv b { color: var(--text); font-weight: 500; }
+.log { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 240px; overflow: auto; white-space: pre-wrap; color: var(--muted); font-size: 12px; }
+.actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 8px; color: var(--muted); margin-bottom: 12px; }
+.kv b { color: var(--text); font-weight: 500; }
 /* Editable rows sit in the same grid as the read-only ones, so they must not
    look like form fields until you reach for them. */
-.panel .kv .kv-edit {
+.kv .kv-edit {
   background: none; border: 1px solid transparent; color: var(--text); padding: 1px 4px;
   margin: -1px 0 -1px -5px; font: inherit; border-radius: 4px; width: 100%;
 }
-.panel .kv .kv-edit:hover { border-color: var(--line); background: var(--bg); }
-.panel .kv .kv-edit:focus { border-color: var(--accent); background: var(--bg); outline: none; }
-.panel .respond { display: flex; gap: 6px; margin-top: 8px; }
+.kv .kv-edit:hover { border-color: var(--line); background: var(--bg); }
+.kv .kv-edit:focus { border-color: var(--accent); background: var(--bg); outline: none; }
+.respond { display: flex; gap: 6px; margin-top: 8px; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Config is reference material; while an agent is waiting it gets out of the way. */

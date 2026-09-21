@@ -127,21 +127,25 @@ export function AgentPanel() {
         <div className="workspace-tabs-right">
           <details className="kv-pop">
             <summary>details</summary>
-            <div className="kv">
-              <span>runtime</span>
-              <b>{agent.runtime}</b>
-              <span>folder</span>
-              <b className="ellipsis" title={agent.cwd}>{agent.cwd}</b>
-              <span>tools</span>
-              <b>{agent.allowedTools.length ? agent.allowedTools.join(", ") : "none"}</b>
-              <span>ticket</span>
-              <b>{ticket ? ticket.title : "none"}</b>
-              <span>session</span>
-              <b className="ellipsis" title={state.sessionId ?? ""}>{state.sessionId ?? "-"}</b>
+            <div className="kv-pop-card">
+              <div className="kv">
+                <span>runtime</span>
+                <b>{agent.runtime}</b>
+                <span>folder</span>
+                <b className="ellipsis" title={agent.cwd}>{agent.cwd}</b>
+                <span>tools</span>
+                <b>{agent.allowedTools.length ? agent.allowedTools.join(", ") : "none"}</b>
+                <span>ticket</span>
+                <b>{ticket ? ticket.title : "none"}</b>
+                <span>session</span>
+                <b className="ellipsis" title={state.sessionId ?? ""}>{state.sessionId ?? "-"}</b>
+              </div>
+              <div className="kv-pop-foot">
+                <button className="danger" onClick={() => send({ type: "agent.fire", agentId: agent.id })}>
+                  Fire {agent.name}
+                </button>
+              </div>
             </div>
-            <button className="danger" onClick={() => send({ type: "agent.fire", agentId: agent.id })}>
-              Fire {agent.name}
-            </button>
           </details>
         </div>
       </nav>
