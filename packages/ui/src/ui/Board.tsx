@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Ticket, TicketStatus } from "@agent-office/shared";
 import { useOffice, statusColor } from "../store";
+import { CloseIcon, IconButton } from "./IconButton";
 
 /**
  * Three columns rather than one per ticket status. Assigned, in progress and
@@ -27,6 +28,7 @@ export function Board() {
   const states = useOffice((s) => s.states);
   const send = useOffice((s) => s.send);
   const setDragging = useOffice((s) => s.setDragging);
+  const setBoardOpen = useOffice((s) => s.setBoardOpen);
   const [title, setTitle] = useState("");
   const [over, setOver] = useState<TicketStatus | null>(null);
 
@@ -47,6 +49,9 @@ export function Board() {
     <section className="board">
       <header>
         <h3>Board</h3>
+        <IconButton label="Close board" onClick={() => setBoardOpen(false)}>
+          <CloseIcon />
+        </IconButton>
       </header>
       <div className="new">
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="New ticket title" onKeyDown={(e) => e.key === "Enter" && create()} />

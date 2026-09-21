@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { CLAUDE_MODELS, PERMISSION_MODES, type Agent, type PermissionMode } from "@agent-office/shared";
+import { CloseIcon, IconButton } from "./IconButton";
 
 /**
  * Everything about how an agent is configured, in one place away from the
@@ -36,7 +37,9 @@ export function SettingsSheet({
       <aside className="sheet" onClick={(e) => e.stopPropagation()}>
         <header>
           <h4>{agent.name} settings</h4>
-          <button onClick={onClose}>×</button>
+          <IconButton label="Close" onClick={onClose}>
+            <CloseIcon />
+          </IconButton>
         </header>
         <div className="sheet-body">
           <label>

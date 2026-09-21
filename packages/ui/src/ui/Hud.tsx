@@ -33,7 +33,9 @@ export function Hud() {
       <span className="spacer" />
       <span className="conn">{connected ? "● live" : "○ reconnecting"}</span>
       <button onClick={() => setSetupOpen(true)}>Setup</button>
-      <button onClick={() => setBoardOpen(!boardOpen)}>{boardOpen ? "Close board" : "Board"}</button>
+      <button className={boardOpen ? "pressed" : ""} aria-pressed={boardOpen} onClick={() => setBoardOpen(!boardOpen)}>
+        Board
+      </button>
       <button className="primary" onClick={() => setHireOpen(true)}>
         + Hire
       </button>

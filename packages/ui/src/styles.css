@@ -34,6 +34,9 @@ button:hover { border-color: var(--accent); }
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 button.primary { background: var(--accent); border-color: var(--accent); color: #0b1620; font-weight: 600; }
+/* A toggle that looks pressed, so the label does not have to change and shift
+   everything beside it. */
+button.pressed { background: var(--accent); border-color: var(--accent); color: #0b1620; }
 button.danger { border-color: var(--bad); color: var(--bad); }
 input, textarea, select {
   font: inherit; font-size: 13px; color: inherit; background: var(--bg); border: 1px solid var(--line);
