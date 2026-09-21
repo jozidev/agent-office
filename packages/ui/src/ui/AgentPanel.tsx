@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CLAUDE_MODELS, PERMISSION_MODES, ROLE_PRESETS, type PermissionMode } from "@agent-office/shared";
 import { useOffice, statusColor, statusLabel } from "../store";
 import { AskCard } from "./AskCard";
@@ -6,6 +6,7 @@ import { Changes } from "./Changes";
 import { FolderPicker } from "./FolderPicker";
 import { withFileLinks } from "./FilePath";
 import { elapsed } from "./metrics";
+import { SteerBar } from "./SteerBar";
 import { TerminalPanel } from "./Terminal";
 import { ChatPanel } from "./Chat";
 
@@ -28,6 +29,7 @@ export function AgentPanel() {
   const setSelected = useOffice((s) => s.setSelected);
   const [tab, setTab] = useState<TabId | null>(null);
   const [browsing, setBrowsing] = useState(false);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
 
   const busy = state ? state.status === "thinking" || state.status === "tool_use" : false;
   const touched = state?.touchedFiles.length ?? 0;
@@ -104,7 +106,14 @@ export function AgentPanel() {
 
       {waiting && (
         <div className="workspace-ask">
-          <AskCard agentName={agent.name} question={question} answerIn={state.answerIn} baseDir={agent.cwd} onSend={answer} />
+          <AskCard
+            agentName={agent.name}
+            question={question}
+            answerIn={state.answerIn}
+            baseDir={agent.cwd}
+            onSend={answer}
+            onReject={() => replyRef.current?.focus()}
+          />
         </div>
       )}
 
@@ -121,28 +130,6 @@ export function AgentPanel() {
             <div className="kv">
               <span>runtime</span>
               <b>{agent.runtime}</b>
-              <span>model</span>
-              <select className="kv-edit" value={agent.model} onChange={(e) => send({ type: "agent.update", agentId: agent.id, model: e.target.value })}>
-                {CLAUDE_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-                {!CLAUDE_MODELS.some((m) => m.id === agent.model) && <option value={agent.model}>{agent.model}</option>}
-              </select>
-              <span>permissions</span>
-              <select
-                className="kv-edit"
-                value={agent.permissionMode}
-                title={PERMISSION_MODES.find((p) => p.id === agent.permissionMode)?.blurb}
-                onChange={(e) => send({ type: "agent.update", agentId: agent.id, permissionMode: e.target.value as PermissionMode })}
-              >
-                {PERMISSION_MODES.map((p) => (
-                  <option key={p.id} value={p.id} title={p.blurb}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
               <span>folder</span>
               <b className="ellipsis" title={agent.cwd}>{agent.cwd}</b>
               <span>tools</span>
@@ -179,6 +166,19 @@ export function AgentPanel() {
             <TerminalPanel key={agent.id} agentId={agent.id} agentName={agent.name} />
           ))}
       </div>
+
+      <SteerBar
+        ref={replyRef}
+        model={agent.model}
+        permissionMode={agent.permissionMode}
+        busy={busy}
+        canStop={Boolean(state.ticketId)}
+        onSend={answer}
+        onModel={(model) => send({ type: "agent.update", agentId: agent.id, model })}
+        onPermissionMode={(permissionMode) => send({ type: "agent.update", agentId: agent.id, permissionMode })}
+        onStop={() => send({ type: "session.stop", agentId: agent.id })}
+        onTakeOver={() => setTab("terminal")}
+      />
     </aside>
   );
 

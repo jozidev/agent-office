@@ -114,6 +114,17 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
 .kv-pop[open] > button { top: calc(100% + 1px); transform: translateY(100%); width: auto; box-shadow: none; }
 
 .workspace-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; }
+
+/* Steering lives at the foot of the pane, where a reply box belongs, and is
+   always about the next turn rather than the one in flight. */
+.steer { border-top: 1px solid var(--line); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--panel-2); }
+.steer textarea { min-height: 46px; max-height: 140px; font-size: 12px; }
+.steer-controls { display: flex; align-items: center; gap: 14px; }
+.steer-controls label { display: flex; align-items: center; gap: 6px; margin: 0; }
+.steer-controls label > span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.steer-controls select { padding: 3px 6px; font-size: 12px; }
+.steer-note { color: var(--muted); font-size: 11px; }
+.steer-right { margin-left: auto; display: flex; gap: 6px; }
 .workspace-body > .log { max-height: none; flex: 1; }
 .workspace-files { padding: 4px 0; }
 
