@@ -11,3 +11,7 @@ screenshots/
 .env
 .env.*
 !.env.example
+
+# Editor and agent scratch
+*.swp
+office-check.txt

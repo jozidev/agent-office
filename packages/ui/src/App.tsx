@@ -31,6 +31,8 @@ export function App() {
   const dragging = useOffice((s) => s.draggingTicketId);
   const toasts = useOffice((s) => s.toasts);
   const setSetupOpen = useOffice((s) => s.setSetupOpen);
+  const selected = useOffice((s) => s.selectedAgentId);
+  const boardOpen = useOffice((s) => s.boardOpen);
 
   // First run: open the setup page automatically when something fails.
   useEffect(() => {
@@ -61,7 +63,11 @@ export function App() {
         }
       }}
     >
-      <OfficeScene />
+      {/* The canvas is given the remaining width so the room refits, rather
+          than a pane sliding over a room drawn for the full screen. */}
+      <div className={`canvas-host${selected ? " canvas--with-pane" : boardOpen ? " canvas--with-board" : ""}`}>
+        <OfficeScene />
+      </div>
       <Hud />
       <Tooltip />
       <Board />

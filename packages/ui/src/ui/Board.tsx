@@ -1,19 +1,30 @@
 import { useState } from "react";
 import type { Ticket, TicketStatus } from "@agent-office/shared";
-import { useOffice } from "../store";
+import { useOffice, statusColor } from "../store";
 
-const COLUMNS: { id: TicketStatus; label: string }[] = [
-  { id: "backlog", label: "Backlog" },
-  { id: "assigned", label: "Assigned" },
-  { id: "in_progress", label: "In progress" },
-  { id: "waiting", label: "Waiting" },
-  { id: "done", label: "Done" },
+/**
+ * Three columns rather than one per ticket status. Assigned, in progress and
+ * waiting are all "someone is on this"; splitting them made three sparse
+ * columns that said less than one column with the agent's status on the card.
+ */
+const COLUMNS: { id: TicketStatus; label: string; holds: TicketStatus[] }[] = [
+  { id: "backlog", label: "Backlog", holds: ["backlog"] },
+  { id: "assigned", label: "Working", holds: ["assigned", "in_progress", "waiting"] },
+  { id: "done", label: "Done", holds: ["done"] },
 ];
+
+/** What the agent on this ticket is doing, in the ticket's language. */
+function workLabel(ticket: TicketStatus, agentStatus?: string): string {
+  if (agentStatus === "waiting" || ticket === "waiting") return "needs you";
+  if (ticket === "assigned") return "assigned";
+  return "in progress";
+}
 
 export function Board() {
   const open = useOffice((s) => s.boardOpen);
   const tickets = useOffice((s) => s.tickets);
   const agents = useOffice((s) => s.agents);
+  const states = useOffice((s) => s.states);
   const send = useOffice((s) => s.send);
   const setDragging = useOffice((s) => s.setDragging);
   const setBoardOpen = useOffice((s) => s.setBoardOpen);
@@ -28,9 +39,9 @@ export function Board() {
     setTitle("");
   };
 
-  const byStatus = (s: TicketStatus) =>
+  const inColumn = (holds: TicketStatus[]) =>
     Object.values(tickets)
-      .filter((t) => t.status === s)
+      .filter((t) => holds.includes(t.status))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   return (
@@ -59,16 +70,32 @@ export function Board() {
               e.preventDefault();
               setOver(null);
               const id = e.dataTransfer.getData("ticket");
-              if (id) send({ type: "ticket.move", ticketId: id, status: c.id });
+              // Dropping into Working without saying who is a no-op: an agent
+              // is chosen by dropping on a desk, not by column.
+              if (id && c.id !== "assigned") send({ type: "ticket.move", ticketId: id, status: c.id });
             }}
           >
             <h5>
               <span>{c.label}</span>
-              <span>{byStatus(c.id).length}</span>
+              <span>{inColumn(c.holds).length}</span>
             </h5>
-            {byStatus(c.id).map((t) => (
-              <Card key={t.id} ticket={t} agentName={t.assignedAgentId ? agents[t.assignedAgentId]?.name : undefined} agentColor={t.assignedAgentId ? agents[t.assignedAgentId]?.color : undefined} onDragStart={() => setDragging(t.id)} onDragEnd={() => setDragging(null)} onDelete={() => send({ type: "ticket.delete", ticketId: t.id })} />
-            ))}
+            {inColumn(c.holds).map((t) => {
+              const agent = t.assignedAgentId ? agents[t.assignedAgentId] : undefined;
+              const agentStatus = t.assignedAgentId ? states[t.assignedAgentId]?.status : undefined;
+              return (
+                <Card
+                  key={t.id}
+                  ticket={t}
+                  agentName={agent?.name}
+                  agentColor={agent?.color}
+                  work={c.id === "assigned" ? workLabel(t.status, agentStatus) : undefined}
+                  workColor={agentStatus ? statusColor[agentStatus] : undefined}
+                  onDragStart={() => setDragging(t.id)}
+                  onDragEnd={() => setDragging(null)}
+                  onDelete={() => send({ type: "ticket.delete", ticketId: t.id })}
+                />
+              );
+            })}
           </div>
         ))}
       </div>
@@ -81,6 +108,8 @@ function Card({
   ticket,
   agentName,
   agentColor,
+  work,
+  workColor,
   onDragStart,
   onDragEnd,
   onDelete,
@@ -88,6 +117,8 @@ function Card({
   ticket: Ticket;
   agentName?: string;
   agentColor?: string;
+  work?: string;
+  workColor?: string;
   onDragStart: () => void;
   onDragEnd: () => void;
   onDelete: () => void;
@@ -115,6 +146,11 @@ function Card({
           </>
         ) : (
           "unassigned"
+        )}
+        {work && (
+          <span className="work" style={{ color: workColor }}>
+            {work}
+          </span>
         )}
       </div>
     </div>

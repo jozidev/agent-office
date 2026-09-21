@@ -5,6 +5,7 @@ import { AskCard } from "./AskCard";
 import { Changes } from "./Changes";
 import { FolderPicker } from "./FolderPicker";
 import { withFileLinks } from "./FilePath";
+import { elapsed } from "./metrics";
 import { TerminalPanel } from "./Terminal";
 import { ChatPanel } from "./Chat";
 
@@ -30,6 +31,14 @@ export function AgentPanel() {
 
   const busy = state ? state.status === "thinking" || state.status === "tool_use" : false;
   const touched = state?.touchedFiles.length ?? 0;
+
+  // Elapsed has to tick on its own; nothing else in the store changes per second.
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
 
   // Default per your intent rather than per tab order: while it is working you
   // want to see it working; once it stops you want to see what it did.
@@ -57,6 +66,38 @@ export function AgentPanel() {
         <h3>
           {agent.name} <small>· {preset.label}</small>
         </h3>
+        {/* What the agent is configured as, always; what it is costing, only
+            while it is actually running. */}
+        <dl className="workspace-meta">
+          <div>
+            <dt>model</dt>
+            <dd>{CLAUDE_MODELS.find((m) => m.id === agent.model)?.label ?? agent.model}</dd>
+          </div>
+          <div>
+            <dt>permissions</dt>
+            <dd>{PERMISSION_MODES.find((p) => p.id === agent.permissionMode)?.label ?? agent.permissionMode}</dd>
+          </div>
+          <div className="workspace-meta-folder">
+            <dt>folder</dt>
+            <dd title={agent.cwd}>{agent.cwd}</dd>
+          </div>
+          {busy && (
+            <>
+              <div>
+                <dt>elapsed</dt>
+                <dd>{elapsed(state.metrics.startedAt)}</dd>
+              </div>
+              <div>
+                <dt>cost</dt>
+                <dd>${state.metrics.costUsd.toFixed(2)}</dd>
+              </div>
+              <div>
+                <dt>context</dt>
+                <dd>{state.metrics.contextPct === null ? "-" : `${Math.round(state.metrics.contextPct * 100)}%`}</dd>
+              </div>
+            </>
+          )}
+        </dl>
         <span className="workspace-status">{statusLabel[state.status]}</span>
         <button onClick={() => setSelected(null)}>×</button>
       </header>
