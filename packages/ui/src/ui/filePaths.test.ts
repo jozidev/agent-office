@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { resolvePath, stripTrailingPunctuation } from "./filePaths.js";
 
-const CWD = "/Users/johan/Development/agent-office";
+/** Stand-in for an agent's working folder; nothing here depends on a real one. */
+const CWD = "/repo";
 
 describe("resolvePath", () => {
   it("takes absolute paths as they are", () => {
-    expect(resolvePath("/Users/johan/notes.md")).toBe("/Users/johan/notes.md");
+    expect(resolvePath("/repo/notes.md")).toBe("/repo/notes.md");
     expect(resolvePath("~/notes.md")).toBe("~/notes.md");
   });
 
