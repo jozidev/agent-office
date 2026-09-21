@@ -354,3 +354,30 @@ describe("file_touched", () => {
     expect(events.filter((e) => e.kind === "file_touched")).toEqual([]);
   });
 });
+
+describe("context gauge", () => {
+  const usageLine = (cacheRead: number) =>
+    [
+      JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "hi" }], usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: cacheRead } } }),
+      JSON.stringify({ type: "result", subtype: "success", result: "done" }),
+    ].join("\n");
+
+  const pctFrom = (ndjson: string, contextWindow: number) => {
+    const events: RunnerEvent[] = [];
+    const parser = createStreamParser((e) => events.push(e), { contextWindow });
+    for (const line of ndjson.split("\n")) parser.handleLine(line);
+    const ctx = events.filter((e) => e.kind === "context").at(-1);
+    return ctx?.kind === "context" ? ctx.pct : null;
+  };
+
+  it("measures against the model's window, not a fixed 200k", () => {
+    // 100k used is a tenth of a 1M model and half of a 200k one.
+    expect(pctFrom(usageLine(100_000), 1_000_000)).toBeCloseTo(0.1, 3);
+    expect(pctFrom(usageLine(100_000), 200_000)).toBeCloseTo(0.5, 3);
+  });
+
+  it("never reports more than full", () => {
+    expect(pctFrom(usageLine(5_000_000), 1_000_000)).toBe(1);
+  });
+});

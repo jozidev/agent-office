@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { contextWindowFor } from "@agent-office/shared";
 import type { Agent, RunnerEvent, Ticket } from "@agent-office/shared";
 import type { RunningSession, SessionRunner } from "./runner.js";
 import { touchedPath } from "./claudeTools.js";
@@ -35,7 +36,6 @@ import { expandHome } from "./setup.js";
  * "general-purpose" when it's missing.
  */
 
-const CONTEXT_WINDOW = 200_000;
 
 function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
@@ -122,6 +122,8 @@ export interface StreamParserOpts {
    * and the agent went idle with your decision still outstanding.
    */
   proposesOnly?: boolean;
+  /** The model's context window; the gauge is meaningless without it. */
+  contextWindow?: number;
 }
 
 export function createStreamParser(emit: (e: RunnerEvent) => void, opts: StreamParserOpts = {}) {
@@ -183,7 +185,7 @@ export function createStreamParser(emit: (e: RunnerEvent) => void, opts: StreamP
     const u = line.message?.usage;
     applyUsage(u, undefined);
     if (u && !inSubagent) {
-      const pct = ((u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.output_tokens ?? 0)) / CONTEXT_WINDOW;
+      const pct = ((u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.output_tokens ?? 0)) / (opts.contextWindow ?? contextWindowFor(null));
       emit({ kind: "context", pct: clamp01(pct) });
     }
   };
@@ -321,7 +323,7 @@ export class CliRunner implements SessionRunner {
 
     const proc = spawn(this.command, args, { cwd, detached: true, stdio: ["pipe", "pipe", "pipe"], env: agentEnv(agent.id) });
 
-    const parser = createStreamParser(emit, { proposesOnly: agent.permissionMode === "plan" });
+    const parser = createStreamParser(emit, { proposesOnly: agent.permissionMode === "plan", contextWindow: contextWindowFor(agent.model) });
     let stopped = false;
     let exited = false;
     let stderrTail = "";

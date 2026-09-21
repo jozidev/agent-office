@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   Agent,
   CLAUDE_MODELS,
+  contextWindowFor,
   ClientMessage,
   DEFAULT_MODEL,
   DEFAULT_PERMISSION_MODE,
@@ -99,5 +100,34 @@ describe("runtime", () => {
   it("rejects a runtime the office cannot drive", () => {
     expect(Runtime.safeParse("claude").success).toBe(true);
     expect(Runtime.safeParse("gpt").success).toBe(false);
+  });
+});
+
+/**
+ * The gauge was a flat 200k for every model, so an agent on a 1M model read
+ * five times fuller than it was — a run barely started looked close to
+ * needing a compaction.
+ */
+describe("context window", () => {
+  it("gives each model its real window", () => {
+    expect(contextWindowFor("claude-opus-5")).toBe(1_000_000);
+    expect(contextWindowFor("claude-sonnet-5")).toBe(1_000_000);
+    expect(contextWindowFor("claude-fable-5-1")).toBe(1_000_000);
+    expect(contextWindowFor("claude-haiku-4-5")).toBe(200_000);
+  });
+
+  it("resolves the aliases the CLI accepts", () => {
+    expect(contextWindowFor("opus")).toBe(contextWindowFor("claude-opus-5"));
+    expect(contextWindowFor("haiku")).toBe(200_000);
+  });
+
+  it("assumes the current generation for anything it does not know", () => {
+    // Guessing small is what produced the overstated gauge in the first place.
+    expect(contextWindowFor("some-future-model")).toBe(1_000_000);
+    expect(contextWindowFor(null)).toBe(1_000_000);
+  });
+
+  it("gives every listed model a window", () => {
+    for (const m of CLAUDE_MODELS) expect(m.contextWindow).toBeGreaterThan(0);
   });
 });
