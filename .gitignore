@@ -6,3 +6,8 @@ screenshots
 apps/cli/ui
 .claude/
 screenshots/
+
+# Secrets
+.env
+.env.*
+!.env.example
