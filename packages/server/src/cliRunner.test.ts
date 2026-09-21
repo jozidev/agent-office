@@ -299,3 +299,58 @@ describe("a run that emits more than one result", () => {
     expect(events.some((e) => e.kind === "done" || e.kind === "error")).toBe(false);
   });
 });
+
+/**
+ * The office deals in "the agent changed a file"; which tool did it is the
+ * runner's business. These assert the mapping without anything above the
+ * runner needing to know the names.
+ */
+describe("file_touched", () => {
+  const withTool = (name: string, input: unknown) =>
+    run(
+      [
+        JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name, input }] } }),
+        JSON.stringify({ type: "result", subtype: "success", result: "done" }),
+      ].join("\n"),
+    ).filter((e) => e.kind === "file_touched");
+
+  it("maps every file-writing tool to a path", () => {
+    for (const tool of ["Write", "Edit", "MultiEdit"]) {
+      expect(withTool(tool, { file_path: "/x/a.ts" })).toEqual([{ kind: "file_touched", path: "/x/a.ts" }]);
+    }
+    expect(withTool("NotebookEdit", { notebook_path: "/x/n.ipynb" })).toEqual([{ kind: "file_touched", path: "/x/n.ipynb" }]);
+  });
+
+  it("ignores tools that only read", () => {
+    expect(withTool("Read", { file_path: "/x/a.ts" })).toEqual([]);
+    expect(withTool("Grep", { pattern: "x" })).toEqual([]);
+    expect(withTool("Bash", { command: "rm -rf /x" })).toEqual([]);
+  });
+
+  it("ignores a write tool that named no path", () => {
+    expect(withTool("Write", {})).toEqual([]);
+  });
+
+  it("still reports the tool call itself, so activity is unchanged", () => {
+    const events = run(
+      [
+        JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: "/x/a.ts" } }] } }),
+        JSON.stringify({ type: "result", subtype: "success", result: "done" }),
+      ].join("\n"),
+    );
+    expect(events.filter((e) => e.kind === "tool_use")).toHaveLength(1);
+  });
+
+  it("does not attribute a subagent's writes to the main agent", () => {
+    const events = run(
+      [
+        JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+        JSON.stringify({ type: "assistant", parent_tool_use_id: "sub1", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: "/x/a.ts" } }] } }),
+        JSON.stringify({ type: "result", subtype: "success", result: "done" }),
+      ].join("\n"),
+    );
+    expect(events.filter((e) => e.kind === "file_touched")).toEqual([]);
+  });
+});

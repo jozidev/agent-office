@@ -13,6 +13,7 @@ import { registerTerminalRoutes, type TerminalManager } from "./terminal.js";
 import { registerNativeTerminalRoutes } from "./nativeTerminal.js";
 import { registerFsRoutes } from "./fsBrowse.js";
 import { registerOpenPathRoutes } from "./openPath.js";
+import { registerChangesRoutes } from "./changes.js";
 import { registerChatRoutes } from "./chat.js";
 import { MemoryStore, SETTINGS, SqliteStore, type Store } from "./store.js";
 import { allowedOrigins, isAllowedHost, isAllowedOrigin } from "./security.js";
@@ -80,6 +81,7 @@ export async function createServer(opts: ServerOptions = {}) {
   registerNativeTerminalRoutes(app, office, terminals, store); // hand a session to the machine's real terminal
   registerFsRoutes(app); // folder picker for the hire form
   registerOpenPathRoutes(app); // open a file an agent wrote, from the log
+  registerChangesRoutes(app, office); // what each agent has changed
   registerChatRoutes(app, office); // M4: /ws/chat/:agentId (chat-role agents)
 
   /** The hire form reopens its folder browser wherever you last hired from. */

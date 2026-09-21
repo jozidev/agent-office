@@ -2,6 +2,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Agent, RunnerEvent } from "@agent-office/shared";
 import { expandHome } from "./setup.js";
+import { touchedPath } from "./claudeTools.js";
 
 /**
  * Installs Claude Code hooks (docs: https://code.claude.com/docs/en/hooks)
@@ -217,7 +218,12 @@ export function hookToEvents(payload: HookPayload): RunnerEvent[] {
       }
       // agent_id present means this PreToolUse fired inside a subagent's own turn (docs: "agent_id: uuid (subagent only)") — route it to that tile.
       if (payload.agent_id) return [{ kind: "subagent_tool", id: payload.agent_id, name, summary: summarizeToolInput(payload.tool_input) }];
-      return [{ kind: "tool_use", name, summary: summarizeToolInput(payload.tool_input) }];
+      // A take-over in the terminal is still this agent's work, so its writes
+      // count towards the same set of changes.
+      const path = touchedPath(name, payload.tool_input);
+      return path
+        ? [{ kind: "tool_use", name, summary: summarizeToolInput(payload.tool_input) }, { kind: "file_touched", path }]
+        : [{ kind: "tool_use", name, summary: summarizeToolInput(payload.tool_input) }];
     }
     case "PostToolUse":
       return [{ kind: "thinking" }];

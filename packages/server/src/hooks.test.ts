@@ -112,9 +112,18 @@ describe("hookToEvents", () => {
     expect(hookToEvents({ hook_event_name: "SessionStart", session_id: "s1" })).toEqual([{ kind: "started", sessionId: "s1" }]);
   });
 
-  it("maps PreToolUse for a normal tool to tool_use with a short summary", () => {
+  it("maps PreToolUse for a read-only tool to tool_use with a short summary", () => {
+    const events = hookToEvents({ hook_event_name: "PreToolUse", tool_name: "Read", tool_input: { file_path: "src/a.ts" } });
+    expect(events).toEqual([{ kind: "tool_use", name: "Read", summary: "src/a.ts" }]);
+  });
+
+  /** A take-over in the terminal is still this agent's work, so its writes count. */
+  it("also reports a file_touched when the tool writes", () => {
     const events = hookToEvents({ hook_event_name: "PreToolUse", tool_name: "Edit", tool_input: { file_path: "src/a.ts" } });
-    expect(events).toEqual([{ kind: "tool_use", name: "Edit", summary: "src/a.ts" }]);
+    expect(events).toEqual([
+      { kind: "tool_use", name: "Edit", summary: "src/a.ts" },
+      { kind: "file_touched", path: "src/a.ts" },
+    ]);
   });
 
   it("maps PreToolUse for Agent/Task to subagent_start", () => {

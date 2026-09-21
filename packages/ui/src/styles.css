@@ -62,6 +62,66 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
   position: absolute; top: 44px; right: 0; bottom: 0; width: 380px; background: var(--panel-solid);
   border-left: 1px solid var(--line); z-index: 10; display: flex; flex-direction: column; overflow: hidden;
 }
+
+/* The workspace pane: a diff needs width, so it takes most of the screen and
+   leaves the office as a strip down the side. */
+.workspace {
+  position: absolute; top: 44px; right: 0; bottom: 0; left: 320px; background: var(--panel-solid);
+  border-left: 1px solid var(--line); z-index: 10; display: flex; flex-direction: column; overflow: hidden;
+}
+.workspace > header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.workspace > header h3 { margin: 0; font-size: 14px; }
+.workspace > header h3 small { color: var(--muted); font-weight: 400; }
+.workspace-status { margin-left: auto; color: var(--muted); font-size: 12px; }
+.workspace-ask { padding: 12px 14px 0; }
+
+.workspace-tabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line); }
+.workspace-tabs > button {
+  border: none; background: none; border-radius: 0; border-bottom: 2px solid transparent;
+  padding: 8px 10px; color: var(--muted); text-transform: none; letter-spacing: 0; font-size: 13px;
+}
+.workspace-tabs > button:hover { color: var(--text); }
+.workspace-tabs > button.sel { color: var(--text); border-bottom-color: var(--accent); }
+.tab-badge {
+  display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 8px; font-style: normal;
+  font-size: 11px; background: var(--panel-2); color: var(--muted);
+}
+.workspace-tabs-right { margin-left: auto; position: relative; }
+.kv-pop > summary {
+  cursor: pointer; list-style: none; color: var(--muted); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .06em; padding: 8px 4px;
+}
+.kv-pop > summary::-webkit-details-marker { display: none; }
+.kv-pop[open] > div, .kv-pop[open] > button {
+  position: absolute; right: 0; top: 100%; z-index: 40; width: 380px;
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.5); padding: 12px;
+}
+.kv-pop[open] > button { top: calc(100% + 1px); transform: translateY(100%); width: auto; box-shadow: none; }
+
+.workspace-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; }
+.workspace-body > .log { max-height: none; flex: 1; }
+.workspace-files { padding: 4px 0; }
+
+/* Changes: files on the left, what changed on the right. */
+.changes { display: flex; gap: 12px; flex: 1; min-height: 0; }
+.changes-list {
+  width: 260px; flex: none; overflow: auto; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); padding: 4px; display: flex; flex-direction: column;
+}
+.changes-list > button {
+  display: flex; align-items: baseline; gap: 8px; text-align: left; border: none; background: none;
+  padding: 5px 8px; border-radius: 4px; text-transform: none; letter-spacing: 0; font-size: 12px;
+}
+.changes-list > button:hover { background: var(--panel-2); }
+.changes-list > button.sel { background: var(--panel-2); color: var(--text); }
+.changes-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.changes-counts { display: flex; gap: 6px; font-style: normal; font-size: 11px; }
+.changes-counts .add { color: var(--ok); font-style: normal; }
+.changes-counts .del { color: var(--bad); font-style: normal; }
+.changes-diff { flex: 1; min-width: 0; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.changes-note { padding: 14px; color: var(--muted); font-size: 12px; }
+.changes-note--inline { padding: 6px 8px; }
 .panel header { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
 .panel header h3 { margin: 0; flex: 1; }
 .panel .body { padding: 12px 14px; overflow: auto; flex: 1; }

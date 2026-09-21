@@ -121,6 +121,12 @@ export const AgentState = z.object({
   subagents: z.array(Subagent),
   /** last N event lines for the panel */
   log: z.array(z.string()),
+  /**
+   * Files this agent has written during the current session, in the order
+   * first touched. Reset when a new session starts, so it answers "what has
+   * this agent changed" rather than accumulating across unrelated work.
+   */
+  touchedFiles: z.array(z.string()).default([]),
 });
 export type AgentState = z.infer<typeof AgentState>;
 
@@ -200,6 +206,12 @@ export const RunnerEvent = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("started"), sessionId: z.string() }),
   z.object({ kind: z.literal("thinking") }),
   z.object({ kind: z.literal("tool_use"), name: z.string(), summary: z.string() }),
+  /**
+   * The agent wrote to a file. Runtime-neutral on purpose: the office needs
+   * "which files did this agent change", not which tool a particular CLI used
+   * to change them. Mapping tool names to this is each runner's job.
+   */
+  z.object({ kind: z.literal("file_touched"), path: z.string() }),
   z.object({ kind: z.literal("waiting"), prompt: z.string() }),
   z.object({ kind: z.literal("usage"), input: z.number(), output: z.number(), cacheRead: z.number(), costUsd: z.number() }),
   z.object({ kind: z.literal("context"), pct: z.number().min(0).max(1) }),

@@ -82,6 +82,7 @@ export class Office {
         ticketId: null,
         question: null,
       answerIn: null,
+      touchedFiles: [],
       metrics: emptyMetrics(),
         subagents: [],
         log: ["back at their desk"],
@@ -153,6 +154,7 @@ export class Office {
       ticketId: null,
       question: null,
       answerIn: null,
+      touchedFiles: [],
       metrics: emptyMetrics(),
       subagents: [],
       log: [`hired as ${preset.label}`],
@@ -358,6 +360,9 @@ export class Office {
     const ticketId = state.ticketId;
     switch (e.kind) {
       case "started":
+        // A new session is new work: what the last one changed is no longer
+        // the answer to "what has this agent changed".
+        if (state.sessionId !== e.sessionId) state.touchedFiles = [];
         state.sessionId = e.sessionId;
         // Remembered across restarts so the terminal can still --resume this conversation.
         this.store.saveAgentSession(agentId, e.sessionId);
@@ -380,6 +385,9 @@ export class Office {
         state.answerIn = "panel";
         this.pushLog(state, `asks: ${truncateLog(e.prompt)}`);
         if (ticketId) this.updateTicket(ticketId, { status: "waiting" });
+        break;
+      case "file_touched":
+        if (!state.touchedFiles.includes(e.path)) state.touchedFiles.push(e.path);
         break;
       case "usage":
         state.metrics.inputTokens = e.input;
@@ -534,6 +542,9 @@ export class Office {
       case "error":
         this.pushLog(state, `error: ${e.message}`);
         if (!state.ticketId) state.status = "idle";
+        break;
+      case "file_touched":
+        if (!state.touchedFiles.includes(e.path)) state.touchedFiles.push(e.path);
         break;
       case "usage":
       case "context":

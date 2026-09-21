@@ -93,8 +93,10 @@ export const useOffice = create<OfficeStore>((set, get) => ({
   },
 
   setHovered: (hoveredAgentId) => set({ hoveredAgentId }),
-  setSelected: (selectedAgentId) => set({ selectedAgentId }),
-  setBoardOpen: (boardOpen) => set({ boardOpen }),
+  // The board and an agent's workspace both want the screen, so opening one
+  // puts the other away rather than stacking them.
+  setSelected: (selectedAgentId) => set({ selectedAgentId, ...(selectedAgentId && { boardOpen: false }) }),
+  setBoardOpen: (boardOpen) => set({ boardOpen, ...(boardOpen && { selectedAgentId: null }) }),
   setHireOpen: (hireOpen) => set({ hireOpen }),
   setSetupOpen: (setupOpen) => {
     if (!setupOpen) {

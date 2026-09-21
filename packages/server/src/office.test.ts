@@ -350,3 +350,56 @@ describe("where a question can be answered", () => {
     expect(state?.answerIn).toBeNull();
   });
 });
+
+describe("touched files", () => {
+  it("records what the agent wrote, in the order it first wrote it", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("do a thing", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    runner.emit({ kind: "file_touched", path: "/x/b.ts" });
+    runner.emit({ kind: "file_touched", path: "/x/a.ts" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.touchedFiles).toEqual(["/x/b.ts", "/x/a.ts"]);
+  });
+
+  it("records a file once however often it is written", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("do a thing", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    for (let i = 0; i < 3; i++) runner.emit({ kind: "file_touched", path: "/x/a.ts" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.touchedFiles).toEqual(["/x/a.ts"]);
+  });
+
+  it("counts a take-over in the terminal as the same agent's work", () => {
+    const { office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    office.ingestExternal(agent.id, { kind: "file_touched", path: "/x/from-terminal.ts" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.touchedFiles).toEqual(["/x/from-terminal.ts"]);
+  });
+
+  /** A new session is new work; last session's files are not the answer to "what has this agent changed". */
+  it("starts again when a new session begins", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("do a thing", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    runner.emit({ kind: "file_touched", path: "/x/old.ts" });
+    runner.emit({ kind: "started", sessionId: "s2" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.touchedFiles).toEqual([]);
+  });
+
+  it("keeps them when the same session reports started again", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("do a thing", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    runner.emit({ kind: "file_touched", path: "/x/a.ts" });
+    runner.emit({ kind: "started", sessionId: "s1" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.touchedFiles).toEqual(["/x/a.ts"]);
+  });
+});

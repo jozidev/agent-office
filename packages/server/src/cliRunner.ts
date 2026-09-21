@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import type { Agent, RunnerEvent, Ticket } from "@agent-office/shared";
 import type { RunningSession, SessionRunner } from "./runner.js";
+import { touchedPath } from "./claudeTools.js";
 import { agentEnv } from "./hooks.js";
 import { expandHome } from "./setup.js";
 
@@ -174,6 +175,8 @@ export function createStreamParser(emit: (e: RunnerEvent) => void, opts: StreamP
           emit({ kind: "subagent_start", id, type: input.subagent_type ?? "general-purpose", description: input.description ?? "" });
         } else {
           emit({ kind: "tool_use", name, summary });
+          const path = touchedPath(name, block.input);
+          if (path) emit({ kind: "file_touched", path });
         }
       }
     }

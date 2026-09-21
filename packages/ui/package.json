@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@agent-office/shared": "workspace:*",
+    "@git-diff-view/react": "^0.1.7",
     "@react-three/drei": "^9.114.0",
     "@react-three/fiber": "^8.17.10",
     "@xterm/addon-fit": "^0.11.0",
