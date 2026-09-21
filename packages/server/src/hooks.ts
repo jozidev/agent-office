@@ -14,6 +14,14 @@ import { expandHome } from "./setup.js";
  */
 export const MARKER = "agent-office";
 
+/** The variable hooks check to tell an office-spawned session from the user's own. */
+export const AGENT_ENV_VAR = "AGENT_OFFICE_AGENT";
+
+/** Environment for a claude process the office spawns, so its hooks report in. */
+export function agentEnv(agentId: string, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return { ...base, [AGENT_ENV_VAR]: agentId };
+}
+
 const HOOK_EVENTS = ["SessionStart", "PreToolUse", "PostToolUse", "SubagentStop", "Stop", "SessionEnd", "Notification"] as const;
 
 interface HookHandler {
@@ -41,9 +49,29 @@ function settingsPath(agent: Agent): string {
 }
 
 /** curl reads the hook's JSON off stdin and POSTs it verbatim; the event name travels inside that JSON (hook_event_name), so one command works for every event. */
+/**
+ * Hooks live in the agent's *project folder*, so they fire for every Claude
+ * Code session run there — including the user's own. Without this guard an
+ * agent's log filled up with whatever its owner happened to be doing in the
+ * same repo, attributed to the agent.
+ *
+ * The office sets AGENT_OFFICE_AGENT on every claude process it spawns, so a
+ * session that did not come from the office fails the comparison and exits 0
+ * without posting. Exiting 0 matters: a non-zero hook is an error Claude Code
+ * will surface to whoever is running it.
+ */
+function onlyForAgent(agentId: string): string {
+  return `[ "$AGENT_OFFICE_AGENT" = ${shellQuote(agentId)} ] || exit 0;`;
+}
+
+/** Single-quote for /bin/sh. Agent ids are nanoids, but this is not the place to assume that. */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
 function hookCommand(serverUrl: string, agentId: string): string {
   const url = `${serverUrl}/api/hook?agent=${encodeURIComponent(agentId)}`;
-  return `curl -s -X POST -H 'content-type: application/json' --data-binary @- '${url}' >/dev/null 2>&1 # ${MARKER}`;
+  return `${onlyForAgent(agentId)} curl -s -X POST -H 'content-type: application/json' --data-binary @- '${url}' >/dev/null 2>&1 # ${MARKER}`;
 }
 
 /**
@@ -60,7 +88,9 @@ function statusLineCommand(serverUrl: string, agentId: string): string {
     "process.stdin.on('end',()=>{",
     "let m='agent';",
     "try{const j=JSON.parse(d);m=(j.model&&j.model.display_name)||m;}catch(e){}",
-    `try{const u=new URL(${JSON.stringify(url)});const req=require(u.protocol==='https:'?'https':'http').request(u,{method:'POST',headers:{'content-type':'application/json'}});req.on('error',()=>{});req.end(d);}catch(e){}`,
+    // Someone else's session in this folder still gets a status bar; it just
+    // does not report into the office.
+    `if(process.env.AGENT_OFFICE_AGENT===${JSON.stringify(agentId)}){try{const u=new URL(${JSON.stringify(url)});const req=require(u.protocol==='https:'?'https':'http').request(u,{method:'POST',headers:{'content-type':'application/json'}});req.on('error',()=>{});req.end(d);}catch(e){}}`,
     "console.log('['+m+']');",
     "});",
   ].join("");

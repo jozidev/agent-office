@@ -1,9 +1,11 @@
+import { spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, readFile, stat, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Agent } from "@agent-office/shared";
-import { hookToEvents, installHooks, MARKER, uninstallHooks } from "./hooks.js";
+import { AGENT_ENV_VAR, agentEnv, hookToEvents, installHooks, MARKER, uninstallHooks } from "./hooks.js";
 
 let dir: string;
 
@@ -150,5 +152,113 @@ describe("hookToEvents", () => {
 
   it("ignores unknown hook event names", () => {
     expect(hookToEvents({ hook_event_name: "SomeFutureEvent" })).toEqual([]);
+  });
+});
+
+/**
+ * Hooks live in the agent's project folder, so they fire for every Claude Code
+ * session run there — including the user's own. Observed before this guard:
+ * a developer's tool calls in their own repo showed up in an agent's log,
+ * attributed to the agent.
+ */
+describe("hooks only report for the session the office started", () => {
+  const agentFor = (cwd: string): Agent =>
+    ({
+      id: "a1",
+      name: "Ada",
+      role: "coder",
+      color: "#fff",
+      model: "claude-opus-5",
+      cwd,
+      systemPrompt: "",
+      allowedTools: [],
+      permissionMode: "manual",
+      uiMode: "terminal",
+      desk: 0,
+      createdAt: "",
+    }) as Agent;
+
+  /**
+   * A stub `curl` that records being called, so the assertion is "did it try
+   * to post" rather than "did a server receive something" — no sockets, no
+   * timers, nothing left open.
+   */
+  function stubCurl(): { bin: string; calls: () => number } {
+    const bin = mkdtempSync(join(tmpdir(), "agent-office-bin-"));
+    const log = join(bin, "calls.log");
+    writeFileSync(join(bin, "curl"), `#!/bin/sh\necho called >> ${JSON.stringify(log)}\n`, { mode: 0o755 });
+    chmodSync(join(bin, "curl"), 0o755);
+    return {
+      bin,
+      calls: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).length : 0),
+    };
+  }
+
+  /** Runs a hook command under /bin/sh with a given env, as Claude Code would. */
+  function runHook(command: string, agentEnvValue: string, bin: string) {
+    return spawnSync("/bin/sh", ["-c", command], {
+      input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash" }),
+      env: { ...process.env, AGENT_OFFICE_AGENT: agentEnvValue, PATH: `${bin}:${process.env["PATH"] ?? ""}` },
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+  }
+
+  async function hookCommandFor(dir: string): Promise<string> {
+    await installHooks(agentFor(dir), "http://127.0.0.1:9");
+    const settings = JSON.parse(readFileSync(join(dir, ".claude", "settings.local.json"), "utf8"));
+    return settings.hooks.PreToolUse[0].hooks[0].command as string;
+  }
+
+  it("exits 0 without posting for a session that is not this agent's", async () => {
+    const command = await hookCommandFor(mkdtempSync(join(tmpdir(), "agent-office-guard-")));
+    const curl = stubCurl();
+
+    // The user's own Claude Code session in the same repo.
+    expect(runHook(command, "", curl.bin).status).toBe(0);
+    // A different agent of the same office, working in the same repo.
+    expect(runHook(command, "b2", curl.bin).status).toBe(0);
+    expect(curl.calls()).toBe(0);
+  });
+
+  it("still posts for the session the office spawned", async () => {
+    const command = await hookCommandFor(mkdtempSync(join(tmpdir(), "agent-office-guard-")));
+    const curl = stubCurl();
+    expect(runHook(command, "a1", curl.bin).status).toBe(0);
+    expect(curl.calls()).toBe(1);
+  });
+
+  it("keeps the marker, so uninstall still finds the guarded command", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-office-guard-"));
+    await installHooks(agentFor(dir), "http://127.0.0.1:9");
+    const before = JSON.parse(readFileSync(join(dir, ".claude", "settings.local.json"), "utf8"));
+    expect(before.hooks.Stop[0].hooks[0].command).toContain(MARKER);
+    expect(before.statusLine.command).toContain(MARKER);
+
+    await uninstallHooks(agentFor(dir));
+    const after = JSON.parse(readFileSync(join(dir, ".claude", "settings.local.json"), "utf8"));
+    expect(after.hooks).toBeUndefined();
+    expect(after.statusLine).toBeUndefined();
+  });
+
+  it("gates the statusline POST but still prints a status bar for anyone", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-office-guard-"));
+    await installHooks(agentFor(dir), "http://127.0.0.1:9");
+    const settings = JSON.parse(readFileSync(join(dir, ".claude", "settings.local.json"), "utf8"));
+
+    // A foreign session keeps its status bar; the office just hears nothing.
+    const foreign = spawnSync("/bin/sh", ["-c", settings.statusLine.command as string], {
+      input: JSON.stringify({ model: { display_name: "Opus 5" } }),
+      env: { ...process.env, AGENT_OFFICE_AGENT: "someone-else" },
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    expect(foreign.status).toBe(0);
+    expect(foreign.stdout.trim()).toBe("[Opus 5]");
+  });
+
+  it("puts the agent id in the environment of a session the office spawns", () => {
+    expect(agentEnv("a1")[AGENT_ENV_VAR]).toBe("a1");
+    expect(agentEnv("a1", { PATH: "/usr/bin" })).toMatchObject({ PATH: "/usr/bin", [AGENT_ENV_VAR]: "a1" });
   });
 });

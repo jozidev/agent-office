@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import type { Agent, RunnerEvent, Ticket } from "@agent-office/shared";
 import type { RunningSession, SessionRunner } from "./runner.js";
+import { agentEnv } from "./hooks.js";
 import { expandHome } from "./setup.js";
 
 /**
@@ -315,7 +316,7 @@ export class CliRunner implements SessionRunner {
       return inertSession();
     }
 
-    const proc = spawn(this.command, args, { cwd, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+    const proc = spawn(this.command, args, { cwd, detached: true, stdio: ["pipe", "pipe", "pipe"], env: agentEnv(agent.id) });
 
     const parser = createStreamParser(emit, { proposesOnly: agent.permissionMode === "plan" });
     let stopped = false;

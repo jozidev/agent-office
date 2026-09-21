@@ -92,7 +92,7 @@ const agent = (over: Partial<Agent> = {}): Agent =>
 describe("buildCommand", () => {
   it("resumes the session with the agent's model and permissions", () => {
     expect(buildCommand(agent(), "sess-1")).toBe(
-      "cd '/tmp/project' && claude '--resume' 'sess-1' '--model' 'claude-opus-5' '--permission-mode' 'acceptEdits'",
+      "cd '/tmp/project' && export AGENT_OFFICE_AGENT='a1' && claude '--resume' 'sess-1' '--model' 'claude-opus-5' '--permission-mode' 'acceptEdits'",
     );
   });
 

@@ -7,6 +7,7 @@ import type { Agent } from "@agent-office/shared";
 import type { Office } from "./office.js";
 import { expandHome } from "./setup.js";
 import { SETTINGS, type Store } from "./store.js";
+import { AGENT_ENV_VAR } from "./hooks.js";
 import { claudeArgsFor, type TerminalManager } from "./terminal.js";
 
 /**
@@ -185,7 +186,10 @@ function shQuote(s: string): string {
 /** The line a user can paste into any terminal to pick this session up by hand. */
 export function buildCommand(agent: Agent, sessionId: string | null): string {
   const args = claudeArgsFor(agent, sessionId).map(shQuote).join(" ");
-  return `cd ${shQuote(expandHome(agent.cwd))} && claude${args ? " " + args : ""}`;
+  // Exported rather than prefixed: the session is interactive, and anything
+  // the user runs inside it should still count as this agent.
+  const env = `export ${AGENT_ENV_VAR}=${shQuote(agent.id)}`;
+  return `cd ${shQuote(expandHome(agent.cwd))} && ${env} && claude${args ? " " + args : ""}`;
 }
 
 /**

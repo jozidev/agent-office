@@ -6,6 +6,7 @@ import { spawn as spawnPty } from "node-pty";
 import type { FastifyInstance } from "fastify";
 import type { Agent } from "@agent-office/shared";
 import type { Office } from "./office.js";
+import { agentEnv } from "./hooks.js";
 import { expandHome } from "./setup.js";
 
 /**
@@ -153,7 +154,7 @@ export class TerminalManager {
       cols: size?.cols ?? DEFAULT_COLS,
       rows: size?.rows ?? DEFAULT_ROWS,
       cwd,
-      env: { ...process.env, TERM: "xterm-256color" } as { [key: string]: string },
+      env: { ...agentEnv(agent.id), TERM: "xterm-256color" } as { [key: string]: string },
     };
 
     // No shell fallback: handing an unauthenticated socket an interactive

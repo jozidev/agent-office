@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 import type { FastifyInstance } from "fastify";
 import type { Agent } from "@agent-office/shared";
 import type { Office } from "./office.js";
+import { agentEnv } from "./hooks.js";
 import { expandHome } from "./setup.js";
 
 /**
@@ -110,7 +111,7 @@ export class ChatManager {
 
       let child;
       try {
-        child = spawn(this.opts.claudeBin ?? "claude", args, { cwd });
+        child = spawn(this.opts.claudeBin ?? "claude", args, { cwd, env: agentEnv(agent.id) });
       } catch {
         onEvent({ type: "error", message: "claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code" });
         finish();
