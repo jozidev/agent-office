@@ -1,4 +1,5 @@
 import { withFileLinks } from "./FilePath";
+import { blocks, type Block } from "./markdownBlocks";
 
 /**
  * Just enough markdown to make what an agent writes readable: headings,
@@ -26,55 +27,34 @@ export function inline(text: string, keyPrefix: string, baseDir?: string): React
   return out;
 }
 
-type Block =
-  | { kind: "para" | "bullet" | "number" | "head" | "quote"; text: string; level?: number }
-  | { kind: "code"; text: string }
-  | { kind: "rule" };
-
-export function blocks(src: string): Block[] {
-  const out: Block[] = [];
-  const lines = src.split("\n");
-  let fence: string[] | null = null;
-
-  for (const raw of lines) {
-    if (/^\s*```/.test(raw)) {
-      if (fence) {
-        out.push({ kind: "code", text: fence.join("\n") });
-        fence = null;
-      } else fence = [];
-      continue;
-    }
-    if (fence) {
-      fence.push(raw);
-      continue;
-    }
-
-    const line = raw.trim();
-    if (!line) continue;
-    if (/^([-*_])\1{2,}$/.test(line)) {
-      out.push({ kind: "rule" });
-      continue;
-    }
-    const head = /^(#{1,6})\s+(.*)$/.exec(line);
-    const bullet = /^[-*+]\s+(.*)$/.exec(line);
-    const number = /^\d+[.)]\s+(.*)$/.exec(line);
-    const quote = /^>\s?(.*)$/.exec(line);
-    if (head) out.push({ kind: "head", text: head[2]!, level: head[1]!.length });
-    else if (bullet) out.push({ kind: "bullet", text: bullet[1]! });
-    else if (number) out.push({ kind: "number", text: number[1]! });
-    else if (quote) out.push({ kind: "quote", text: quote[1]! });
-    else out.push({ kind: "para", text: line });
-  }
-  // An unterminated fence still has content worth showing.
-  if (fence?.length) out.push({ kind: "code", text: fence.join("\n") });
-  return out;
-}
-
 export function Markdown({ text, baseDir }: { text: string; baseDir?: string }) {
   return (
     <>
       {blocks(text).map((b, i) => {
         if (b.kind === "rule") return <hr key={i} />;
+        if (b.kind === "table")
+          return (
+            <table key={i} className="md-table">
+              {b.head.length > 0 && (
+                <thead>
+                  <tr>
+                    {b.head.map((c, j) => (
+                      <th key={j}>{inline(c, `th${i}-${j}`, baseDir)}</th>
+                    ))}
+                  </tr>
+                </thead>
+              )}
+              <tbody>
+                {b.rows.map((row, r) => (
+                  <tr key={r}>
+                    {row.map((c, j) => (
+                      <td key={j}>{inline(c, `td${i}-${r}-${j}`, baseDir)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
         if (b.kind === "code") return <pre key={i}>{b.text}</pre>;
         if (b.kind === "head") {
           const Tag = (b.level && b.level <= 2 ? "h4" : "h5") as "h4" | "h5";

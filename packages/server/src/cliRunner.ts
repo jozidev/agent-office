@@ -46,6 +46,17 @@ function truncate(s: string, max: number): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
+/**
+ * Length-capped but structure-preserving, for text meant to be read rather
+ * than skimmed in a log line. `truncate` flattens every newline into a space,
+ * which turned a review's headings, tables and code blocks into one unbroken
+ * paragraph by the time they reached the panel.
+ */
+function clamp(s: string, max: number): string {
+  const t = s.trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
 /** Build a short "doing now" string from a tool_use input, e.g. a file path or command. */
 function summarizeToolInput(input: unknown): string {
   const i = (input ?? {}) as Record<string, unknown>;
@@ -75,9 +86,9 @@ function askPrompt(tool: string, input: unknown): string {
   if (tool === "AskUserQuestion") {
     const questions = Array.isArray(i["questions"]) ? (i["questions"] as Record<string, unknown>[]) : [];
     const first = questions[0]?.["question"];
-    if (typeof first === "string") return truncate(first, QUESTION_LIMIT);
+    if (typeof first === "string") return clamp(first, QUESTION_LIMIT);
   }
-  if (typeof i["plan"] === "string") return truncate(i["plan"] as string, QUESTION_LIMIT);
+  if (typeof i["plan"] === "string") return clamp(i["plan"] as string, QUESTION_LIMIT);
   return `${tool} needs your answer`;
 }
 
@@ -219,7 +230,7 @@ export function createStreamParser(emit: (e: RunnerEvent) => void, opts: StreamP
     }
     // A clean result after an ask — or from an agent that can only propose —
     // is the headless CLI saying "I can't prompt you, so I stopped".
-    if (ask || opts.proposesOnly) emit({ kind: "waiting", prompt: ask || truncate(text, QUESTION_LIMIT) });
+    if (ask || opts.proposesOnly) emit({ kind: "waiting", prompt: ask || clamp(text, QUESTION_LIMIT) });
     else emit({ kind: "done", summary: truncate(text, 300) });
   };
 

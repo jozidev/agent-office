@@ -381,3 +381,52 @@ describe("context gauge", () => {
     expect(pctFrom(usageLine(5_000_000), 1_000_000)).toBe(1);
   });
 });
+
+/**
+ * A log line is skimmed, so it gets its whitespace flattened. A question is
+ * read, and flattening turned a review's headings, tables and code blocks into
+ * one unbroken paragraph.
+ */
+describe("question text keeps its shape", () => {
+  const plan = "# Findings\n\n| # | Severity |\n|---|---|\n| 1 | High |\n\n```ts\nconst x = 1;\n```";
+
+  it("preserves newlines in a plan-mode result", () => {
+    const events = run(
+      [
+        JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+        JSON.stringify({ type: "result", subtype: "success", result: plan }),
+      ].join("\n"),
+      { proposesOnly: true },
+    );
+    const last = events.at(-1);
+    expect(last?.kind).toBe("waiting");
+    if (last?.kind === "waiting") {
+      expect(last.prompt).toBe(plan);
+      expect(last.prompt.split("\n").length).toBeGreaterThan(5);
+    }
+  });
+
+  it("preserves newlines in an ExitPlanMode plan", () => {
+    const events = run(
+      [
+        JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "ExitPlanMode", input: { plan } }] } }),
+        JSON.stringify({ type: "result", subtype: "success", result: "done" }),
+      ].join("\n"),
+    );
+    const last = events.at(-1);
+    if (last?.kind === "waiting") expect(last.prompt).toContain("\n| 1 | High |");
+  });
+
+  it("still flattens a tool summary, which is one line by design", () => {
+    const events = run(
+      [
+        JSON.stringify({ type: "system", subtype: "init", session_id: "s" }),
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command: "a\nb\nc" } }] } }),
+        JSON.stringify({ type: "result", subtype: "success", result: "done" }),
+      ].join("\n"),
+    );
+    const tool = events.find((e) => e.kind === "tool_use");
+    if (tool?.kind === "tool_use") expect(tool.summary).toBe("a b c");
+  });
+});

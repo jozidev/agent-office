@@ -280,6 +280,11 @@ button.icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1p
   margin: 0 0 8px; padding-left: 10px; border-left: 2px solid var(--line); color: var(--muted);
 }
 .ask-body hr, .preview-body hr { border: none; border-top: 1px solid var(--line); margin: 12px 0; }
+/* Findings arrive as tables far more often than as prose. */
+.md-table { border-collapse: collapse; width: 100%; margin: 0 0 12px; font-size: 13px; }
+.md-table th, .md-table td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+.md-table th { background: var(--panel-2); font-weight: 600; white-space: nowrap; }
+.md-table tr:nth-child(even) td { background: rgba(255,255,255,.02); }
 
 /* File preview: a reading window, sized for prose, over the whole app. */
 .preview-bg {

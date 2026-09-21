@@ -17,7 +17,7 @@ import { Markdown } from "./Markdown";
  * would start a second session against the same conversation. So point at the
  * terminal instead.
  */
-function TerminalAsk({ agentName, question }: { agentName: string; question: string }) {
+function TerminalAsk({ agentName, question, baseDir }: { agentName: string; question: string; baseDir: string }) {
   const focusTerminal = () => {
     const host = document.querySelector(".terminal-panel");
     host?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -33,7 +33,9 @@ function TerminalAsk({ agentName, question }: { agentName: string; question: str
         {agentName} is waiting in the terminal
       </header>
       <div className="ask-body">
-        <p>{question}</p>
+        {/* Usually one generic line, but a Notification can carry a whole
+            report; it should read the same either way. */}
+        <Markdown text={question} baseDir={baseDir} />
         <p className="ask-hint">Answer it in the terminal below — it is asking there, and only that session can hear you.</p>
       </div>
       <div className="ask-reply">
@@ -66,7 +68,7 @@ export function AskCard({
 }) {
   const terminalOwned = answerIn === "terminal";
 
-  if (terminalOwned) return <TerminalAsk agentName={agentName} question={question} />;
+  if (terminalOwned) return <TerminalAsk agentName={agentName} question={question} baseDir={baseDir} />;
 
   return (
     <section className="ask">
