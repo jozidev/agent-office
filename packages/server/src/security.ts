@@ -18,11 +18,17 @@
  * would break the release check while stopping no attacker.
  */
 
-/** Where the UI runs under `pnpm dev`, when it is not served from our own port. */
-const VITE_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
-
 /** The only names that can legitimately reach a loopback-bound server. */
 const LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "[::1]"];
+
+/** The subset that appears in an origin; `[::1]` is only ever a Host. */
+const LOOPBACK_NAMES = ["localhost", "127.0.0.1"];
+
+/** Where the UI runs under `pnpm dev`, when it is not served from our own port. */
+const VITE_DEV_PORT = 5173;
+const VITE_DEV_ORIGINS = LOOPBACK_NAMES.map((h) => `http://${h}:${VITE_DEV_PORT}`);
+
+
 
 export interface OriginOptions {
   /** the port this server listens on; its loopback origins are always allowed */
@@ -51,15 +57,27 @@ export function isAllowedOrigin(origin: string | undefined, allowed: readonly st
   return allowed.includes(origin);
 }
 
+/** The ports a Host header may legitimately name. */
+export function allowedHostPorts({ port, dev }: Pick<OriginOptions, "port" | "dev">): number[] {
+  const ports = port ? [port] : [];
+  // Vite rewrites Host to the proxy target for an ordinary request but leaves
+  // it alone on a WebSocket upgrade, so under `pnpm dev` the upgrade arrives
+  // claiming :5173. Without this the office's socket is refused and the client
+  // reconnects forever, while /api works — which is a confusing way to fail.
+  if (dev) ports.push(VITE_DEV_PORT);
+  return ports;
+}
+
 /**
  * True when the Host header names a loopback address. Unlike Origin this must
  * fail closed on absence: HTTP/1.1 requires Host, so a missing one is not a
  * friendly non-browser client, it is someone hand-rolling a request.
  *
- * The port is checked when known, so a rebound name cannot ride in on a
- * matching hostname with a different port.
+ * The port is checked against the ports we actually serve, so a rebound name
+ * cannot ride in on a matching hostname with a different port. The hostname
+ * check is what stops DNS rebinding; the port only narrows it further.
  */
-export function isAllowedHost(host: string | undefined, port?: number): boolean {
+export function isAllowedHost(host: string | undefined, ports?: number | readonly number[]): boolean {
   if (!host) return false;
   const at = host.lastIndexOf(":");
   // An IPv6 literal is bracketed, so the last colon is the port separator only
@@ -68,6 +86,7 @@ export function isAllowedHost(host: string | undefined, port?: number): boolean 
   const name = hasPort ? host.slice(0, at) : host;
   const given = hasPort ? host.slice(at + 1) : "";
   if (!LOOPBACK_HOSTS.includes(name)) return false;
-  if (port === undefined) return true;
-  return given === String(port);
+  const allowed = ports === undefined ? [] : typeof ports === "number" ? [ports] : ports;
+  if (!allowed.length) return true;
+  return allowed.some((p) => given === String(p));
 }

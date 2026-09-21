@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedOrigins, isAllowedHost, isAllowedOrigin } from "./security.js";
+import { allowedHostPorts, allowedOrigins, isAllowedHost, isAllowedOrigin } from "./security.js";
 
 /**
  * Regression tests for the drive-by RCE: an unauthenticated `ws://127.0.0.1`
@@ -68,5 +68,48 @@ describe("isAllowedHost", () => {
 
   it("refuses loopback on a different port", () => {
     expect(isAllowedHost("127.0.0.1:9999", 4177)).toBe(false);
+  });
+});
+
+/**
+ * Vite rewrites Host to the proxy target for an ordinary request but leaves it
+ * alone on a WebSocket upgrade. So under `pnpm dev` /api arrived claiming the
+ * server's port and worked, while /ws arrived claiming :5173 and was refused —
+ * the office's socket reconnected forever with no visible reason.
+ */
+describe("the dev proxy's Host header", () => {
+  it("accepts the Vite port only in dev", () => {
+    expect(isAllowedHost("localhost:5173", allowedHostPorts({ port: 4177, dev: true }))).toBe(true);
+    expect(isAllowedHost("localhost:5173", allowedHostPorts({ port: 4177, dev: false }))).toBe(false);
+  });
+
+  it("still accepts the server's own port in either mode", () => {
+    for (const dev of [true, false]) {
+      expect(isAllowedHost("127.0.0.1:4177", allowedHostPorts({ port: 4177, dev }))).toBe(true);
+    }
+  });
+
+  it("still refuses a port we do not serve, dev or not", () => {
+    expect(isAllowedHost("localhost:9999", allowedHostPorts({ port: 4177, dev: true }))).toBe(false);
+  });
+
+  /** The hostname check is what stops DNS rebinding; the dev port must not weaken it. */
+  it("still refuses a non-loopback name on the dev port", () => {
+    expect(isAllowedHost("evil.com:5173", allowedHostPorts({ port: 4177, dev: true }))).toBe(false);
+  });
+
+  it("takes a single port as well as a list", () => {
+    expect(isAllowedHost("localhost:4177", 4177)).toBe(true);
+    expect(isAllowedHost("localhost:5173", 4177)).toBe(false);
+  });
+
+  it("accepts any loopback port when none are known, as before", () => {
+    expect(isAllowedHost("localhost:1234", allowedHostPorts({ dev: false }))).toBe(true);
+  });
+
+  it("offers both loopback spellings of the dev origin", () => {
+    const origins = allowedOrigins({ port: 4177, dev: true });
+    expect(origins).toContain("http://localhost:5173");
+    expect(origins).toContain("http://127.0.0.1:5173");
   });
 });

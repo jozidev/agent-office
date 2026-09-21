@@ -16,7 +16,7 @@ import { registerOpenPathRoutes } from "./openPath.js";
 import { registerChangesRoutes } from "./changes.js";
 import { registerChatRoutes } from "./chat.js";
 import { MemoryStore, SETTINGS, SqliteStore, type Store } from "./store.js";
-import { allowedOrigins, isAllowedHost, isAllowedOrigin } from "./security.js";
+import { allowedHostPorts, allowedOrigins, isAllowedHost, isAllowedOrigin } from "./security.js";
 
 export interface ServerOptions {
   runner?: SessionRunner;
@@ -51,15 +51,13 @@ export async function createServer(opts: ServerOptions = {}) {
   // WebSocket upgrade is an ordinary GET, so onRequest sees it before
   // @fastify/websocket ever accepts the socket. See security.ts for why
   // loopback binding is not authorization.
-  const origins = allowedOrigins({
-    port: opts.port,
-    // No uiDir means Vite is serving the UI from its own port, not us.
-    dev: !opts.uiDir,
-    extra: process.env.AGENT_OFFICE_ALLOWED_ORIGINS,
-  });
+  // No uiDir means Vite is serving the UI from its own port, not us.
+  const dev = !opts.uiDir;
+  const origins = allowedOrigins({ port: opts.port, dev, extra: process.env.AGENT_OFFICE_ALLOWED_ORIGINS });
+  const hostPorts = allowedHostPorts({ port: opts.port, dev });
   app.addHook("onRequest", async (req, reply) => {
     if (req.url === "/api/health") return;
-    if (!isAllowedHost(req.headers.host, opts.port)) {
+    if (!isAllowedHost(req.headers.host, hostPorts)) {
       return reply.code(403).send({ error: "forbidden" });
     }
     if (!isAllowedOrigin(req.headers.origin, origins)) {
