@@ -200,6 +200,7 @@ label { display: block; color: var(--muted); margin: 10px 0 4px; }
 }
 .term-menu button { text-align: left; border: none; background: none; padding: 5px 8px; text-transform: none; letter-spacing: 0; }
 .term-menu button:hover { background: var(--panel-2); }
+.terminal-idle { padding: 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .terminal-handoff { padding: 14px; color: var(--muted); font-size: 12px; }
 .terminal-handoff p { margin: 0 0 8px; }
 .terminal-handoff b { color: var(--text); }

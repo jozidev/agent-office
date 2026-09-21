@@ -190,6 +190,14 @@ function useNativeTerminal(agentId: string) {
 }
 
 export function TerminalPanel({ agentId, agentName }: { agentId: string; agentName: string }) {
+  /**
+   * Whether the user has asked for a terminal. Mounting one spawns a real
+   * `claude` process on the server, so opening an agent to read its status
+   * used to start a session — costing money, firing SessionStart hooks, and
+   * knocking the agent out of whatever state you opened it to look at.
+   * Watching an agent and taking it over are different intentions.
+   */
+  const [takenOver, setTakenOver] = useState(false);
   const [popped, setPopped] = useState(false);
   const [pos, setPos] = useState<FloatPos>(DEFAULT_FLOAT);
   const [handedOff, setHandedOff] = useState<string | null>(null);
@@ -216,9 +224,12 @@ export function TerminalPanel({ agentId, agentName }: { agentId: string; agentNa
   }, [popped]);
 
   // A real OS window rather than a div: movable to a second display, and no
-  // longer boxed in by the panel it was launched from.
-  const openWindow = () =>
+  // longer boxed in by the panel it was launched from. Still a take-over —
+  // that window spawns the same pty — so it counts as one.
+  const openWindow = () => {
+    setTakenOver(true);
     window.open(`/terminal/${agentId}`, `agent-office-terminal-${agentId}`, "popup=yes,width=900,height=620");
+  };
 
   const openNative = async () => {
     setMenuOpen(false);
@@ -226,20 +237,19 @@ export function TerminalPanel({ agentId, agentName }: { agentId: string; agentNa
     const body = (await res.json()) as { ok?: boolean; app?: TerminalApp; command?: string };
     // The server kills the in-app pty on handoff (Claude Code will not resume
     // one session twice), so stop rendering it or it just reconnects.
-    if (body.ok) setHandedOff(body.app?.label ?? "your terminal");
+    if (body.ok) {
+      setHandedOff(body.app?.label ?? "your terminal");
+      setTakenOver(false);
+    }
   };
 
   const copyCommand = () => {
     if (info?.command) void navigator.clipboard?.writeText(info.command);
   };
 
-  const bar = (
-    <div className="terminal-panel-bar">
-      <span>terminal</span>
-      <div className="terminal-actions">
-        <button onClick={() => setPopped(true)}>float</button>
-        <button onClick={openWindow}>window</button>
-        {info?.supported ? (
+  const nativeControls = (
+    <>
+      {info?.supported ? (
           <span className="split">
             <button onClick={openNative}>open in {info.selected?.label ?? "terminal"}</button>
             <button className="caret" onClick={() => setMenuOpen((o) => !o)} title="choose terminal app">
@@ -265,6 +275,16 @@ export function TerminalPanel({ agentId, agentName }: { agentId: string; agentNa
         ) : (
           info && <button onClick={copyCommand} title={info.command}>copy command</button>
         )}
+    </>
+  );
+
+  const bar = (
+    <div className="terminal-panel-bar">
+      <span>terminal</span>
+      <div className="terminal-actions">
+        <button onClick={() => setPopped(true)}>float</button>
+        <button onClick={openWindow}>window</button>
+        {nativeControls}
       </div>
     </div>
   );
@@ -278,7 +298,36 @@ export function TerminalPanel({ agentId, agentName }: { agentId: string; agentNa
             handed off to <b>{handedOff}</b>.
           </p>
           <p>the session is running there now — this panel let go of it so the two don't fight over it.</p>
-          <button onClick={() => setHandedOff(null)}>reopen here</button>
+          <button
+            onClick={() => {
+              setHandedOff(null);
+              setTakenOver(true);
+            }}
+          >
+            reopen here
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Nothing is running until asked for. The native handoff stays available
+  // here: it starts the session in your own terminal, not in ours.
+  if (!takenOver) {
+    return (
+      <div className="terminal-panel">
+        <div className="terminal-panel-bar">
+          <span>terminal</span>
+          <div className="terminal-actions">
+            <button className="primary" onClick={() => setTakenOver(true)}>
+              Take over
+            </button>
+            <button onClick={openWindow}>window</button>
+            {nativeControls}
+          </div>
+        </div>
+        <div className="terminal-idle">
+          Not attached. Taking over starts a session in this agent&rsquo;s folder and puts you at its prompt.
         </div>
       </div>
     );

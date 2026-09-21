@@ -79,7 +79,7 @@ export function AgentPanel() {
           </div>
         </details>
 
-        {agent.uiMode === "chat" ? <ChatPanel agentId={agent.id} agentName={agent.name} /> : <TerminalPanel agentId={agent.id} agentName={agent.name} />}
+        {agent.uiMode === "chat" ? <ChatPanel agentId={agent.id} agentName={agent.name} /> : <TerminalPanel key={agent.id} agentId={agent.id} agentName={agent.name} />}
 
         <div className="log" style={{ marginTop: 8 }}>
           {state.log.length
