@@ -18,6 +18,13 @@ export const MARKER = "agent-office";
 /** The variable hooks check to tell an office-spawned session from the user's own. */
 export const AGENT_ENV_VAR = "AGENT_OFFICE_AGENT";
 
+/**
+ * What an idle Notification says when it carries no type to go on. Matching
+ * text is a backstop, not the primary check, so a reworded message degrades to
+ * "treated as a question" rather than to silence.
+ */
+const IDLE_MESSAGE = /waiting for your input/i;
+
 /** Environment for a claude process the office spawns, so its hooks report in. */
 export function agentEnv(agentId: string, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return { ...base, [AGENT_ENV_VAR]: agentId };
@@ -231,9 +238,16 @@ export function hookToEvents(payload: HookPayload): RunnerEvent[] {
       // id resolution (matching by agent_id/tool_use_id, else the oldest open one) needs live state, so Office.ingestExternal does the matching; this just carries whatever id we have, possibly none.
       return [{ kind: "subagent_stop", id: payload.agent_id ?? payload.tool_use_id ?? "" }];
     case "Notification": {
-      const t = payload.notification_type ?? "";
-      if (t.includes("permission") || t.includes("idle") || payload.message) {
-        return [{ kind: "waiting", prompt: payload.message ?? "needs your input" }];
+      const kind = (payload.notification_type ?? "").toLowerCase();
+      const message = payload.message ?? "";
+      // Claude Code sends a Notification when a session has sat at its prompt
+      // for a while. That is "nobody is typing", not "I asked you something" —
+      // and the office reported it as "needs you", sending people to the
+      // terminal to look for a question that was never asked. A session with a
+      // background agent running triggers it constantly.
+      if (kind.includes("idle") || IDLE_MESSAGE.test(message)) return [];
+      if (kind.includes("permission") || message) {
+        return [{ kind: "waiting", prompt: message || "needs your input" }];
       }
       return [];
     }

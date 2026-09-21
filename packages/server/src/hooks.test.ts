@@ -273,3 +273,33 @@ describe("hooks only report for the session the office started", () => {
     expect(agentEnv("a1", { PATH: "/usr/bin" })).toMatchObject({ PATH: "/usr/bin", [AGENT_ENV_VAR]: "a1" });
   });
 });
+
+/**
+ * Claude Code sends a Notification when a session has sat at its prompt for a
+ * while. Treating that as a question sent people to the terminal looking for
+ * something that was never asked — and a session waiting on a background agent
+ * triggers it constantly.
+ */
+describe("idle is not a question", () => {
+  it("ignores an idle notification", () => {
+    expect(hookToEvents({ hook_event_name: "Notification", notification_type: "idle", message: "Claude is waiting for your input" })).toEqual([]);
+  });
+
+  it("ignores the idle message even with no type to go on", () => {
+    expect(hookToEvents({ hook_event_name: "Notification", message: "Claude is waiting for your input" })).toEqual([]);
+  });
+
+  it("still reports a permission request", () => {
+    expect(hookToEvents({ hook_event_name: "Notification", notification_type: "permission", message: "Claude needs your permission to use Bash" })).toEqual([
+      { kind: "waiting", prompt: "Claude needs your permission to use Bash" },
+    ]);
+  });
+
+  it("still reports a question that carries only a message", () => {
+    expect(hookToEvents({ hook_event_name: "Notification", message: "Postgres or SQLite?" })).toEqual([{ kind: "waiting", prompt: "Postgres or SQLite?" }]);
+  });
+
+  it("ignores a notification with nothing in it", () => {
+    expect(hookToEvents({ hook_event_name: "Notification" })).toEqual([]);
+  });
+});
