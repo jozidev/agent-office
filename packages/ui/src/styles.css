@@ -324,8 +324,10 @@ button.icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1p
    float window and the popped-out window keep their own sizing, and min-height
    is set all the way down: a flex item defaults to min-height:auto, so one
    full of scrollback refuses to shrink and grows the pane instead. */
-.workspace-body > .terminal-panel { flex: 1; min-height: 0; }
-.workspace-body > .terminal-panel > .xterm-host { height: auto; flex: 1; min-height: 0; }
+.terminal-mount { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.terminal-mount[hidden] { display: none; }
+.terminal-mount > .terminal-panel { flex: 1; min-height: 0; margin-top: 0; }
+.terminal-mount > .terminal-panel > .xterm-host { height: auto; flex: 1; min-height: 0; }
 .xterm-host--float { height: 100%; }
 .xterm-host--fill { flex: 1; min-height: 0; padding: 4px 6px; }
 

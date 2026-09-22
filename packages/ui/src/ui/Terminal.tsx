@@ -106,6 +106,9 @@ function useTerminalSession(containerRef: React.RefObject<HTMLDivElement | null>
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
+        // Hidden (another tab is showing) measures 0x0, and fitting to that
+        // would resize the pty to nothing and reflow the whole session.
+        if (!container.clientWidth || !container.clientHeight) return;
         try {
           fit.fit();
         } catch {

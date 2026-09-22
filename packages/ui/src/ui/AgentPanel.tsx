@@ -133,12 +133,16 @@ export function AgentPanel() {
             {browsing && <FolderPicker start={agent.cwd} onClose={() => setBrowsing(false)} onPick={() => setBrowsing(false)} />}
           </div>
         )}
-        {active === "terminal" &&
-          (agent.uiMode === "chat" ? (
+        {/* Hidden rather than unmounted: unmounting disposes the xterm, and
+            coming back replays only the server's ring buffer, so everything
+            above it is gone. Keeping it mounted keeps the scrollback. */}
+        <div className="terminal-mount" hidden={active !== "terminal"}>
+          {agent.uiMode === "chat" ? (
             <ChatPanel agentId={agent.id} agentName={agent.name} />
           ) : (
             <TerminalPanel key={agent.id} agentId={agent.id} agentName={agent.name} />
-          ))}
+          )}
+        </div>
       </div>
 
       {settingsOpen && (

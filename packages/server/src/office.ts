@@ -39,6 +39,9 @@ function truncateLog(s: string): string {
   return line.length > 120 ? `${line.slice(0, 119)}\u2026` : line;
 }
 
+/** Events that mean the agent is working again, so an outstanding ask is answered. */
+const MOVED_ON = new Set<RunnerEvent["kind"]>(["tool_use", "thinking", "subagent_start", "subagent_tool", "done"]);
+
 const LOG_LIMIT = 60;
 
 /**
@@ -553,6 +556,16 @@ export class Office {
       case "context":
         // Not tracked for external sessions: these numbers belong to whichever session the ticket metrics panel is already showing.
         break;
+    }
+
+    // An answer given in the terminal produces no event of its own, so the ask
+    // is cleared by the agent visibly moving on. `started` is excluded: that
+    // fires when you open a terminal to read the question, and dismissing it
+    // for looking at it is how this got broken the first time.
+    if (MOVED_ON.has(e.kind) && state.answerIn === "terminal") {
+      state.question = null;
+      state.answerIn = null;
+      if (state.status === "waiting") state.status = "thinking";
     }
     this.broadcast({ type: "state.update", state });
   }

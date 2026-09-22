@@ -460,3 +460,53 @@ describe("metrics for a session the office did not start", () => {
     expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.metrics.costUsd).toBe(9.99);
   });
 });
+
+/**
+ * An answer typed into the terminal produces no event of its own, so the ask
+ * card has to notice the agent moving on. Clearing on every hook event
+ * cancelled questions just for opening a terminal to read them; clearing on
+ * none left the card up forever.
+ */
+describe("a terminal-owned ask clears itself", () => {
+  const asking = () => {
+    const { office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    office.ingestExternal(agent.id, { kind: "waiting", prompt: "may I?" });
+    return { office, agent };
+  };
+
+  it("clears once the agent runs a tool again", () => {
+    const { office, agent } = asking();
+    office.ingestExternal(agent.id, { kind: "tool_use", name: "Read", summary: "/x/a.ts" });
+    const state = office.snapshot().states.find((s) => s.agentId === agent.id);
+    expect(state?.question).toBeNull();
+    expect(state?.answerIn).toBeNull();
+    expect(state?.status).not.toBe("waiting");
+  });
+
+  it("clears when the turn finishes", () => {
+    const { office, agent } = asking();
+    office.ingestExternal(agent.id, { kind: "done", summary: "finished" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.question).toBeNull();
+  });
+
+  /** Opening a terminal to read the question must not dismiss it. */
+  it("survives a session starting", () => {
+    const { office, agent } = asking();
+    office.ingestExternal(agent.id, { kind: "started", sessionId: "term-1" });
+    const state = office.snapshot().states.find((s) => s.agentId === agent.id);
+    expect(state?.question).toBe("may I?");
+    expect(state?.status).toBe("waiting");
+  });
+
+  it("leaves a panel-owned ask alone, which is answered through the panel", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("t", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    runner.emit({ kind: "waiting", prompt: "which?" });
+    office.ingestExternal(agent.id, { kind: "tool_use", name: "Read", summary: "/x" });
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.question).toBe("which?");
+  });
+});
