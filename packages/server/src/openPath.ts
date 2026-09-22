@@ -54,6 +54,36 @@ export function isPreviewable(path: string): boolean {
   return PREVIEWABLE.has(extname(path).toLowerCase());
 }
 
+/**
+ * Things the OS runs rather than opens. Agents write files inside the roots
+ * and the UI auto-links any path in their output, so an agent that writes
+ * `notes.command` turns a routine click into execution.
+ *
+ * A denylist rather than an allowlist, deliberately: the common case is
+ * opening a source file the agent just wrote, and an allowlist broad enough
+ * for that is every extension in the repo. The executable bit is checked too,
+ * which is what actually makes a file runnable whatever it is called.
+ */
+const EXECUTABLE = new Set([
+  ".command", ".app", ".sh", ".bash", ".zsh", ".fish", ".tool", ".workflow",
+  ".exe", ".bat", ".cmd", ".com", ".scr", ".msi", ".ps1", ".vbs", ".wsf",
+  ".scpt", ".applescript", ".jar", ".pkg", ".dmg", ".run", ".appimage",
+]);
+
+/** Why this path must not be handed to the OS, or null if it may be. */
+export async function refuseToOpen(path: string): Promise<string | null> {
+  if (EXECUTABLE.has(extname(path).toLowerCase())) {
+    return `${extname(path)} files are run rather than opened — reveal it instead`;
+  }
+  try {
+    const s = await stat(path);
+    if (s.mode & 0o111) return "that file is executable — reveal it instead";
+  } catch {
+    /* the caller stats it too and reports a missing file properly */
+  }
+  return null;
+}
+
 export interface OpenPathDeps {
   platform?: NodeJS.Platform;
   roots?: readonly string[];
@@ -82,6 +112,13 @@ export function registerOpenPathRoutes(app: FastifyInstance, deps: OpenPathDeps 
       await stat(path);
     } catch {
       return reply.code(404).send({ error: "that file is not there any more" });
+    }
+
+    // `reveal` only selects the file in a file manager, so it stays open to
+    // anything; `open` is the one that can execute.
+    if (mode !== "reveal") {
+      const refusal = await refuseToOpen(path);
+      if (refusal) return reply.code(403).send({ error: refusal, path });
     }
 
     const argv = openArgs(path, mode === "reveal" ? "reveal" : "open", platform);

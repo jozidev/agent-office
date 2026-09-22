@@ -227,10 +227,15 @@ export function TerminalPanel({ agentId, agentName }: { agentId: string; agentNa
   }, [popped]);
 
   // A real OS window rather than a div: movable to a second display, and no
-  // longer boxed in by the panel it was launched from. Still a take-over —
-  // that window spawns the same pty — so it counts as one.
+  // longer boxed in by the panel it was launched from.
+  //
+  // The docked terminal is released first. That window attaches to the same
+  // pty, and leaving both mounted put two writers on it — every keystroke
+  // echoed twice and the two fought over the size. openNative already lets go
+  // for the same reason; this path did not.
   const openWindow = () => {
-    setTakenOver(true);
+    setTakenOver(false);
+    setPopped(false);
     window.open(`/terminal/${agentId}`, `agent-office-terminal-${agentId}`, "popup=yes,width=900,height=620");
   };
 

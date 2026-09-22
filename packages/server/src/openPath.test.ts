@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it } from "vitest";
-import { isPreviewable, openArgs, registerOpenPathRoutes } from "./openPath.js";
+import { isPreviewable, openArgs, refuseToOpen, registerOpenPathRoutes } from "./openPath.js";
 
 let dir: string;
 
@@ -125,5 +125,51 @@ describe("GET /api/file", () => {
 
   it("reports a missing file", async () => {
     expect((await get(join(dir, "gone.md"))).statusCode).toBe(404);
+  });
+});
+
+/**
+ * Agents write files inside the roots and the UI auto-links any path in their
+ * output, so an agent that writes `notes.command` turned a routine click into
+ * execution. Reported by a review agent reading its own codebase.
+ */
+describe("refusing to open things the OS would run", () => {
+  it("refuses a file the OS executes rather than opens", async () => {
+    for (const name of ["run.command", "Thing.app", "go.sh", "setup.exe", "x.bat", "a.scpt"]) {
+      writeFileSync(join(dir, name), "echo hi\n");
+      expect(await refuseToOpen(join(dir, name))).toBeTruthy();
+    }
+  });
+
+  it("refuses anything carrying the executable bit, whatever it is called", async () => {
+    const p = join(dir, "harmless.txt");
+    writeFileSync(p, "echo hi\n", { mode: 0o755 });
+    chmodSync(p, 0o755);
+    expect(await refuseToOpen(p)).toBeTruthy();
+  });
+
+  it("still opens the files this feature exists for", async () => {
+    for (const name of ["notes.md", "index.ts", "shot.png", "report.pdf"]) {
+      writeFileSync(join(dir, name), "x");
+      expect(await refuseToOpen(join(dir, name))).toBeNull();
+    }
+  });
+
+  it("refuses over the route, and says why", async () => {
+    writeFileSync(join(dir, "run.command"), "echo hi\n");
+    const launched: [string, string[]][] = [];
+    const res = await serve(launched).inject({ method: "POST", url: "/api/open", payload: { path: join(dir, "run.command") } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toMatch(/run rather than opened/);
+    expect(launched).toEqual([]);
+  });
+
+  /** Reveal only selects the file in a file manager, so it stays open to anything. */
+  it("still reveals one", async () => {
+    writeFileSync(join(dir, "run.command"), "echo hi\n");
+    const launched: [string, string[]][] = [];
+    const res = await serve(launched).inject({ method: "POST", url: "/api/open", payload: { path: join(dir, "run.command"), mode: "reveal" } });
+    expect(res.statusCode).toBe(200);
+    expect(launched[0]![1]).toContain("-R");
   });
 });

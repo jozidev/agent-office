@@ -510,3 +510,87 @@ describe("a terminal-owned ask clears itself", () => {
     expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.question).toBe("which?");
   });
 });
+
+/**
+ * Two state-machine bugs a review agent found by reading office.ts.
+ */
+describe("assign is not re-entrant", () => {
+  it("ignores the same ticket dropped on the desk already working it", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("t", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    const stoppedBefore = runner.stopped;
+
+    // Used to fall through to startSession and overwrite the RunningSession
+    // without stopping it, leaving two processes on one agent.
+    expect(office.assign(ticket.id, agent.id)).toBeUndefined();
+    expect(runner.stopped).toBe(stoppedBefore);
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.ticketId).toBe(ticket.id);
+  });
+
+  it("still starts the ticket the first time", () => {
+    const { office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("t", "");
+    expect(office.assign(ticket.id, agent.id)).toBeUndefined();
+    expect(office.snapshot().tickets[0]?.assignedAgentId).toBe(agent.id);
+  });
+
+  it("still refuses a different ticket while busy", () => {
+    const { office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const a = office.createTicket("a", "");
+    const b = office.createTicket("b", "");
+    office.assign(a.id, agent.id);
+    expect(office.assign(b.id, agent.id)).toContain("busy");
+  });
+});
+
+describe("the settle-to-idle timer", () => {
+  it("does not clear the ticket of work started after it was scheduled", async () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const first = office.createTicket("first", "");
+    office.assign(first.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    runner.emit({ kind: "done", summary: "finished" });
+
+    // Releasing the agent and giving it new work, all inside the settle
+    // window. The pending timer used to fire afterwards and drop the new
+    // ticket out from under it.
+    office.stopSession(agent.id);
+    const second = office.createTicket("second", "");
+    office.assign(second.id, agent.id);
+    await new Promise((r) => setTimeout(r, 4200));
+
+    const state = office.snapshot().states.find((s) => s.agentId === agent.id);
+    expect(state?.ticketId).toBe(second.id);
+  }, 10_000);
+
+  it("does not fire against an agent that has been fired", async () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("t", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    runner.emit({ kind: "done", summary: "finished" });
+    office.fire(agent.id);
+    await new Promise((r) => setTimeout(r, 4200));
+    expect(office.snapshot().agents).toHaveLength(0);
+  }, 10_000);
+
+  it("still settles an agent left alone", async () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("t", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    runner.emit({ kind: "done", summary: "finished" });
+    await new Promise((r) => setTimeout(r, 4200));
+    const state = office.snapshot().states.find((s) => s.agentId === agent.id);
+    expect(state?.status).toBe("idle");
+    expect(state?.ticketId).toBeNull();
+  }, 10_000);
+});

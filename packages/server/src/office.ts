@@ -182,6 +182,7 @@ export class Office {
     }
     this.agents.delete(agentId);
     this.states.delete(agentId);
+    this.cancelSettle(agentId);
     this.store.deleteAgent(agentId);
     this.broadcast({ type: "agent.removed", agentId });
     if (agent && this.opts.serverUrl) {
@@ -251,8 +252,14 @@ export class Office {
     const state = this.states.get(agentId);
     if (!agent || !state) return "agent not found";
     if (state.ticketId && state.ticketId !== ticketId) return `${agent.name} is busy`;
+    // Dropping a ticket on the desk already working it used to fall straight
+    // through: startSession ran again and sessions.set dropped the old
+    // RunningSession without stopping it, leaving two processes emitting into
+    // one AgentState.
+    if (state.ticketId === ticketId && this.sessions.has(agentId)) return;
     if (t.assignedAgentId && t.assignedAgentId !== agentId) this.stopSession(t.assignedAgentId);
     const ticket = this.updateTicket(ticketId, { assignedAgentId: agentId, status: "assigned" })!;
+    this.cancelSettle(agentId);
     this.startSession(agent, ticket);
   }
 
@@ -280,6 +287,7 @@ export class Office {
       const t = this.tickets.get(state.ticketId);
       if (t && t.status !== "done") this.updateTicket(t.id, { status: "backlog", assignedAgentId: null, sessionId: null });
     }
+    this.cancelSettle(agentId);
     state.status = "idle";
     state.question = null;
     state.answerIn = null;
@@ -350,6 +358,38 @@ export class Office {
     if (!agent || !state?.sessionId) return;
     const session = this.runner.resume(agent, state.sessionId, text, (e) => this.onEvent(agentId, e));
     this.sessions.set(agentId, session);
+  }
+
+  /**
+   * "done" and "error" linger for a moment before the agent settles to idle,
+   * so you can see how a ticket ended. The timer used to outlive whatever it
+   * was settling: firing the agent, or giving it a new ticket, left a pending
+   * callback that dropped `ticketId` out from under the new work a few seconds
+   * later. One timer per agent, cancelled whenever their state moves on.
+   */
+  private settleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  private settleLater(agentId: string, from: AgentState["status"], ms: number) {
+    this.cancelSettle(agentId);
+    this.settleTimers.set(
+      agentId,
+      setTimeout(() => {
+        this.settleTimers.delete(agentId);
+        const state = this.states.get(agentId);
+        if (!state || state.status !== from) return;
+        state.status = "idle";
+        state.ticketId = null;
+        this.broadcast({ type: "state.update", state });
+      }, ms),
+    );
+  }
+
+  private cancelSettle(agentId: string) {
+    const t = this.settleTimers.get(agentId);
+    if (t) {
+      clearTimeout(t);
+      this.settleTimers.delete(agentId);
+    }
   }
 
   private pushLog(state: AgentState, line: string) {
@@ -433,13 +473,7 @@ export class Office {
         this.pushLog(state, e.summary);
         if (ticketId) this.updateTicket(ticketId, { status: "done" });
         this.sessions.delete(agentId);
-        setTimeout(() => {
-          if (state.status === "done") {
-            state.status = "idle";
-            state.ticketId = null;
-            this.broadcast({ type: "state.update", state });
-          }
-        }, 4000);
+        this.settleLater(agentId, "done", 4000);
         break;
       case "error":
         state.status = "error";
@@ -447,13 +481,7 @@ export class Office {
         this.pushLog(state, `error: ${e.message}`);
         if (ticketId) this.updateTicket(ticketId, { status: "backlog", assignedAgentId: null, sessionId: null });
         this.sessions.delete(agentId);
-        setTimeout(() => {
-          if (state.status === "error") {
-            state.status = "idle";
-            state.ticketId = null;
-            this.broadcast({ type: "state.update", state });
-          }
-        }, 6000);
+        this.settleLater(agentId, "error", 6000);
         break;
     }
     if (state.status !== "waiting") {
