@@ -396,7 +396,9 @@ export class CliRunner implements SessionRunner {
         stopped = true;
         killTree("SIGTERM");
         setTimeout(() => {
-          if (!proc.killed) killTree("SIGKILL");
+          // proc.killed only reflects proc.kill(); we signal the group, so it
+          // stayed false and SIGKILL was sent even after a clean exit.
+          if (!exited) killTree("SIGKILL");
         }, 2000);
       },
     };

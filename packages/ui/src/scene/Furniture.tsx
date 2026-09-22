@@ -19,5 +19,5 @@ export function Furniture(props: Props) {
 
 function FurnitureInner({ name, position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }: Props) {
   const obj = useModelClone(furnitureUrl(name));
-  return <primitive object={obj} position={position} rotation={rotation} scale={FURNITURE_SCALE * scale} />;
+  return <primitive dispose={null} object={obj} position={position} rotation={rotation} scale={FURNITURE_SCALE * scale} />;
 }

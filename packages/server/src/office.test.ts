@@ -594,3 +594,36 @@ describe("the settle-to-idle timer", () => {
     expect(state?.ticketId).toBeNull();
   }, 10_000);
 });
+
+describe("respond only delivers an answer to a question", () => {
+  it("ignores text sent to an agent that is working", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("t", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    runner.emit({ kind: "tool_use", name: "Read", summary: "/x" });
+
+    office.respond(agent.id, "hello?");
+    expect(runner.responded).toEqual([]);
+    expect(office.snapshot().states.find((s) => s.agentId === agent.id)?.status).toBe("tool_use");
+  });
+
+  it("ignores text sent to an idle agent", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    office.respond(agent.id, "hello?");
+    expect(runner.responded).toEqual([]);
+  });
+
+  it("still delivers when the agent is waiting", () => {
+    const { runner, office } = setup();
+    const agent = office.hire({ name: "Ada", role: "coder", cwd: "/x" });
+    const ticket = office.createTicket("t", "");
+    office.assign(ticket.id, agent.id);
+    runner.emit({ kind: "started", sessionId: "s1" });
+    runner.emit({ kind: "waiting", prompt: "which?" });
+    office.respond(agent.id, "SQLite");
+    expect(runner.responded).toEqual(["SQLite"]);
+  });
+});

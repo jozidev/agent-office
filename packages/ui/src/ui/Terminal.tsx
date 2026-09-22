@@ -86,7 +86,11 @@ function useTerminalSession(containerRef: React.RefObject<HTMLDivElement | null>
       socket = new WebSocket(wsUrl(`/ws/terminal/${agentId}?cols=${term.cols}&rows=${term.rows}`));
       sentCols = term.cols;
       sentRows = term.rows;
-      socket.onmessage = (ev) => term.write(typeof ev.data === "string" ? ev.data : "");
+      socket.onmessage = (ev) => {
+        // close() is not synchronous: a frame can still land after dispose().
+        if (disposed) return;
+        term.write(typeof ev.data === "string" ? ev.data : "");
+      };
       socket.onclose = () => {
         if (disposed) return;
         reconnectTimer = setTimeout(connect, RECONNECT_MS);
@@ -121,6 +125,7 @@ function useTerminalSession(containerRef: React.RefObject<HTMLDivElement | null>
 
     return () => {
       disposed = true;
+      if (socket) socket.onmessage = null;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (frame) cancelAnimationFrame(frame);
       resizeObserver.disconnect();

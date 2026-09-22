@@ -85,7 +85,7 @@ export function Character({ agent, state, hovered }: Props) {
 
   return (
     <group ref={root}>
-      <primitive object={model} scale={CHAR_SCALE} position={[0, seated ? 0.02 : 0, seated ? 0 : 0.25]} />
+      <primitive dispose={null} object={model} scale={CHAR_SCALE} position={[0, seated ? 0.02 : 0, seated ? 0 : 0.25]} />
       {/* status dot above the head */}
       <mesh position={[0.35, 1.55, 0]}>
         <sphereGeometry args={[0.07, 8, 8]} />

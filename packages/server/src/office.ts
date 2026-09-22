@@ -335,6 +335,11 @@ export class Office {
     // A live session takes the answer on stdin. A headless run that stopped to
     // ask has already exited, so continuing it means a fresh `claude -p
     // --resume` against the same conversation.
+    // Only deliver when the agent actually asked. Writing to a running
+    // session's stdin because a WebSocket client sent text is not an answer to
+    // anything, and nothing above this re-checks.
+    if (state.status !== "waiting") return;
+
     const live = this.sessions.get(agentId);
     if (live?.isAlive()) live.respond(text);
     else if (state.answerIn === "terminal") return;
